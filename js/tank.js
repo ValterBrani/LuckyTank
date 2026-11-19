@@ -14,6 +14,7 @@
       this.index = index;
       this.name = cfg.name;
       this.color = cfg.color;
+      this.team = cfg.team || null; // null = chacun pour soi
       this.stats = Object.assign({}, cfg.stats);
       this.d = HB.derive(this.stats);
       this.x = x; this.y = y;
@@ -42,6 +43,15 @@
       this.deathTime = null;
       this.place = null;
       this.killer = null;
+      // Modules (compétences actives)
+      this.mods = (cfg.modules || []).filter(m => HB.MODULES[m.id]).map(m => ({
+        id: m.id, trigger: m.trigger, def: HB.MODULES[m.id],
+        cd: 1 + Math.random(), uses: HB.MODULES[m.id].uses || Infinity,
+      }));
+      this.shieldT = 0;
+      this.nitroT = 0;
+      this.explosiveNext = false;
+      this.modUses = 0;
       this.brain = new HB.Brain(this);
     }
 
@@ -53,12 +63,18 @@
       const c = this.control;
       const d = this.d;
 
+      // Modules : recharges et effets en cours
+      for (const m of this.mods) m.cd -= dt;
+      this.shieldT = Math.max(0, this.shieldT - dt);
+      this.nitroT = Math.max(0, this.nitroT - dt);
+      const boost = this.nitroT > 0 ? 1.9 : 1;
+
       // Châssis
-      this.angle += clamp(c.turn, -1, 1) * d.turnSpeed * dt;
+      this.angle += clamp(c.turn, -1, 1) * d.turnSpeed * (boost > 1 ? 1.3 : 1) * dt;
       const move = clamp(c.move, -1, 1);
-      const sp = move * d.speed * (move < 0 ? 0.7 : 1);
-      // Inertie légère : les tanks lourds accélèrent moins vite
-      const accel = 4 + 8 * d.weightFactor;
+      const sp = move * d.speed * boost * (move < 0 ? 0.7 : 1);
+      // Inertie légère : les tanks lourds accélèrent moins vite (la nitro aide)
+      const accel = (4 + 8 * d.weightFactor) * (boost > 1 ? 2 : 1);
       const tvx = Math.cos(this.angle) * sp, tvy = Math.sin(this.angle) * sp;
       this.vx += (tvx - this.vx) * Math.min(1, accel * dt);
       this.vy += (tvy - this.vy) * Math.min(1, accel * dt);
@@ -133,6 +149,7 @@
 
     takeDamage(amount, attacker, game) {
       if (!this.alive) return 0;
+      if (this.shieldT > 0) amount *= 0.35; // le bouclier absorbe 65 %
       const real = Math.min(amount, this.hp);
       this.hp -= amount;
       this.damageTaken += real;
@@ -159,6 +176,27 @@
       HB.drawTank(ctx, this.stats, this.color, this.x, this.y, this.angle, this.turret, {
         flash: this.flash, hitFlash: this.hitFlash, recoil: this.recoil, dead: !this.alive, ...opts,
       });
+      if (!this.alive) return;
+      // Obus explosif chargé : lueur orange au bout du canon
+      if (this.explosiveNext) {
+        const len = this.barrelLength();
+        const bx = this.x + Math.cos(this.turret) * len, by = this.y + Math.sin(this.turret) * len;
+        ctx.fillStyle = 'rgba(255,140,40,0.85)';
+        ctx.beginPath(); ctx.arc(bx, by, 3.5 + Math.sin(performance.now() / 80) * 1, 0, Math.PI * 2); ctx.fill();
+      }
+      // Bouclier : bulle bleue
+      if (this.shieldT > 0) {
+        const a = Math.min(1, this.shieldT * 2);
+        const r = 25 + this.stats.blindage * 0.5;
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = 'rgba(90,190,255,0.16)';
+        ctx.strokeStyle = 'rgba(140,215,255,0.9)';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(this.x, this.y, r + Math.sin(performance.now() / 120) * 1.5, 0, Math.PI * 2);
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
     }
   }
 

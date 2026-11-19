@@ -27,6 +27,10 @@
       this.particles = [];
       this.pickups = [];
       this.texts = [];
+      this.smokes = [];
+      this.mines = [];
+      this.player = this.options.challenge ? this.tanks[this.options.playerIndex || 0] : null;
+      this.survived = false;
       this.time = 0;
       this.speed = 1;
       this.paused = false;
@@ -43,9 +47,12 @@
       const zx = HB.W / 2 + (mrng() - 0.5) * 320, zy = HB.H / 2 + (mrng() - 0.5) * 200;
       const sc = this.map.nearestFreeCell(zx, zy);
       const maxR = Math.hypot(HB.W, HB.H) * 0.62;
-      this.zone = { active: false, x: zx, y: zy, r: maxR, maxR, minR: 105, start: 60, dur: 70, safe: this.map.center(sc.cx, sc.cy) };
+      this.zone = {
+        active: false, x: zx, y: zy, r: maxR, maxR, minR: 105,
+        start: this.options.zoneStart ?? 60, dur: this.options.zoneDur ?? 70, safe: this.map.center(sc.cx, sc.cy),
+      };
 
-      this.buildLayers();
+      if (!this.options.headless) this.buildLayers(); // headless : simulation sans rendu (tests d'équilibrage)
       this.frame = this.frame.bind(this);
     }
 
@@ -152,6 +159,7 @@
       this.pickups = this.pickups.filter(p => p.alive);
 
       this.updateShells(dt);
+      this.updateModules(dt);
 
       for (const p of this.particles) {
         p.life -= dt;
@@ -174,14 +182,29 @@
 
       // Fin de partie
       const left = this.tanks.filter(t => t.alive);
-      if (!this.over && left.length <= 1) {
+      const sides = new Set(left.map(t => t.team || t)); // une équipe = un camp
+      let end = sides.size <= 1;
+      const P = this.player;
+      if (P && !P.alive) end = true;                                   // défi : le joueur est détruit
+      if (P && this.options.survive && P.alive && this.time >= this.options.survive) { end = true; this.survived = true; }
+      if (!this.over && end) {
         this.over = true;
         this.endTimer = 2.8;
-        this.winner = left[0] || this.tanks.find(t => t.place === 1) || null;
-        if (left[0]) left[0].place = 1;
-        if (this.winner) {
-          this.feed(`🏆 <b style="color:${this.winner.color}">${esc(this.winner.name)}</b> wins the battle!`, 'win');
+        if (this.survived) this.winner = P;
+        else if (P && !P.alive) this.winner = null;
+        else if (left.length >= 1 && sides.size === 1) this.winner = (P && P.alive) ? P : left.slice().sort((a, b) => b.hp - a.hp)[0];
+        else if (left.length === 0) this.winner = this.tanks.find(t => t.place === 1) || null;
+        else this.winner = null;
+        // Places des survivants : le vainqueur d'abord, puis par PV restants
+        left.slice().sort((a, b) => (b === this.winner) - (a === this.winner) || b.hp - a.hp).forEach((t, i) => { t.place = i + 1; });
+        if (this.survived) {
+          this.feed(`🛡️ <b style="color:${P.color}">${esc(P.name)}</b> held the line for ${this.options.survive} s!`, 'win');
           setTimeout(() => { if (!this.destroyed) HB.sfx.victory(); }, 500);
+        } else if (this.winner) {
+          this.feed(`🏆 <b style="color:${this.winner.color}">${esc(this.winner.name)}</b> wins the battle!`, 'win');
+          if (!P || this.winner === P) setTimeout(() => { if (!this.destroyed) HB.sfx.victory(); }, 500);
+        } else if (P && !P.alive) {
+          this.feed(`💀 <b style="color:${P.color}">${esc(P.name)}</b> was destroyed. Challenge failed.`, 'warn');
         }
       }
       if (this.over) {
@@ -212,21 +235,21 @@
           s.traveled += stepLen / n;
           const cx = Math.floor(s.x / HB.CELL), cy = Math.floor(s.y / HB.CELL);
           const cell = this.map.cell(cx, cy);
-          if (cell === T.WALL) { this.impact(s, false); break; }
+          if (cell === T.WALL) { this.impact(s, false, null); break; }
           if (cell === T.CRATE) {
             const destroyed = this.map.damageCrate(cx, cy, s.dmg);
-            this.impact(s, false);
+            this.impact(s, false, null);
             if (destroyed) this.crateBroken(cx, cy);
             break;
           }
           for (const t of this.tanks) {
-            if (!t.alive || t === s.owner) continue;
+            if (!t.alive || !HB.isEnemy(s.owner, t)) continue; // traverse les alliés
             if (dist(s.x, s.y, t.x, t.y) < t.radius + s.r) {
               s.owner.hits++;
               const real = t.takeDamage(s.dmg, s.owner, this);
               s.owner.damageDealt += real;
-              this.text(t.x + (Math.random() - 0.5) * 10, t.y - 22, '-' + Math.round(s.dmg), '#ffd0c0');
-              this.impact(s, true);
+              this.text(t.x + (Math.random() - 0.5) * 10, t.y - 22, '-' + Math.round(real), t.shieldT > 0 ? '#9fd8ff' : '#ffd0c0');
+              this.impact(s, true, t);
               break;
             }
           }
@@ -244,7 +267,7 @@
       const va = a.vx * nx + a.vy * ny;       // vitesse de a vers b
       const vb = -(b.vx * nx + b.vy * ny);    // vitesse de b vers a
       const closing = va + vb;
-      if (closing < 45 || this.time - a.ramT < 0.6 || this.time - b.ramT < 0.6) return;
+      if (!HB.isEnemy(a, b) || closing < 45 || this.time - a.ramT < 0.6 || this.time - b.ramT < 0.6) return;
       a.ramT = b.ramT = this.time;
       HB.sfx.ram(closing / 200, (a.x + b.x) / 2);
       const rammer = va >= vb ? a : b, other = rammer === a ? b : a;
@@ -265,14 +288,131 @@
       this.shake = Math.max(this.shake, 3 + closing / 40);
     }
 
+    /* ---------------- Modules ---------------- */
+    activateModule(t, m) {
+      const d = m.def;
+      m.cd = d.cooldown || 9999;
+      if (d.uses) m.uses--;
+      t.modUses++;
+      switch (m.id) {
+        case 'nitro': t.nitroT = d.duration; break;
+        case 'bouclier': t.shieldT = d.duration; break;
+        case 'mines': this.dropMine(t); break;
+        case 'fumee': this.smokes.push(this.makeSmoke(t.x, t.y, d.duration)); break;
+        case 'reparation': {
+          const h = t.heal(t.d.maxHp * 0.45);
+          this.text(t.x, t.y - 26, '+' + Math.round(h), '#5f5');
+          for (let i = 0; i < 18; i++) this.particles.push(this.spark(t.x, t.y, '#6f6', 140));
+          break;
+        }
+        case 'explosif': t.explosiveNext = true; break;
+      }
+      this.text(t.x, t.y - 44, d.icon + ' ' + d.label, '#ffe9a8');
+      HB.sfx.ability(m.id, t.x);
+    }
+
+    makeSmoke(x, y, duration) {
+      const puffs = [];
+      for (let i = 0; i < 9; i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * 0.6;
+        puffs.push({ dx: Math.cos(a) * r, dy: Math.sin(a) * r, s: 0.45 + Math.random() * 0.35, ph: Math.random() * 6 });
+      }
+      return { x, y, r: 12, maxR: 80, t: duration, max: duration, puffs };
+    }
+
+    dropMine(t) {
+      const x = t.x - Math.cos(t.angle) * 24, y = t.y - Math.sin(t.angle) * 24;
+      const mine = { owner: t, x, y, armT: 0.7, life: 30, alive: true };
+      if (this.map.cellAt(x, y) !== T.EMPTY) { mine.x = t.x; mine.y = t.y; }
+      this.mines.push(mine);
+      const mine3 = this.mines.filter(m => m.owner === t && m.alive);
+      if (mine3.length > 3) mine3[0].alive = false;
+    }
+
+    /* Explosion de zone (mine, obus explosif) */
+    blast(x, y, dmg, radius, owner, exclude) {
+      for (const t of this.tanks) {
+        if (!t.alive || t === exclude || (owner && !HB.isEnemy(owner, t))) continue;
+        const d = dist(x, y, t.x, t.y);
+        if (d > radius + t.radius) continue;
+        const k = 1 - 0.5 * clamp(d / radius, 0, 1);
+        const real = t.takeDamage(dmg * k, owner, this);
+        if (owner) owner.damageDealt += real;
+        this.text(t.x + 8, t.y - 22, '-' + Math.round(real), '#ffb070');
+      }
+      // Les caisses proches encaissent aussi
+      const C = HB.CELL, r = Math.ceil(radius / C);
+      const cx0 = Math.floor(x / C), cy0 = Math.floor(y / C);
+      for (let cy = cy0 - r; cy <= cy0 + r; cy++) for (let cx = cx0 - r; cx <= cx0 + r; cx++) {
+        if (this.map.cell(cx, cy) !== T.CRATE) continue;
+        const c = this.map.center(cx, cy);
+        if (dist(x, y, c.x, c.y) > radius + C / 2) continue;
+        if (this.map.damageCrate(cx, cy, dmg)) this.crateBroken(cx, cy);
+      }
+      for (let i = 0; i < 3; i++) this.particles.push(this.fireball(x + (Math.random() - 0.5) * 30, y + (Math.random() - 0.5) * 30, 18 + Math.random() * 14));
+      for (let i = 0; i < 22; i++) this.particles.push(this.spark(x, y, i % 2 ? '#ffb347' : '#fff3b0', 260));
+      for (let i = 0; i < 6; i++) this.particles.push(this.smoke(x, y, '#555', 1.4));
+      this.scorch(x, y);
+      this.shake = Math.max(this.shake, 7);
+      HB.sfx.explosion(x);
+    }
+
+    updateModules(dt) {
+      // Fumée
+      for (const s of this.smokes) {
+        s.t -= dt;
+        s.r += (s.maxR - s.r) * Math.min(1, dt * 4);
+      }
+      this.smokes = this.smokes.filter(s => s.t > 0);
+      // Mines
+      for (const m of this.mines) {
+        if (!m.alive) continue;
+        m.armT -= dt; m.life -= dt;
+        if (m.life <= 0) { m.alive = false; continue; }
+        if (m.armT > 0) continue;
+        for (const t of this.tanks) {
+          if (!t.alive || !HB.isEnemy(m.owner, t)) continue;
+          if (dist(t.x, t.y, m.x, m.y) < t.radius + 6) {
+            m.alive = false;
+            this.blast(m.x, m.y, 45, 55, m.owner, null);
+            break;
+          }
+        }
+      }
+      this.mines = this.mines.filter(m => m.alive);
+      // Traînée de la nitro
+      for (const t of this.tanks) {
+        if (!t.alive || t.nitroT <= 0) continue;
+        const bx = t.x - Math.cos(t.angle) * 18, by = t.y - Math.sin(t.angle) * 18;
+        for (let i = 0; i < 2; i++) {
+          const p = this.fireball(bx + (Math.random() - 0.5) * 8, by + (Math.random() - 0.5) * 8, 5 + Math.random() * 4);
+          p.life = p.maxLife = 0.25; p.grow = 6;
+          this.particles.push(p);
+        }
+      }
+    }
+
+    /* Ligne de vue : murs (+ caisses) et nuages de fumée */
+    canSee(x0, y0, x1, y1, crates = true) {
+      if (!this.map.hasLos(x0, y0, x1, y1, crates)) return false;
+      for (const s of this.smokes) {
+        if (s.r < 25) continue;
+        const dx = x1 - x0, dy = y1 - y0, l2 = dx * dx + dy * dy || 1;
+        const k = clamp(((s.x - x0) * dx + (s.y - y0) * dy) / l2, 0, 1);
+        if (dist(s.x, s.y, x0 + dx * k, y0 + dy * k) < s.r * 0.85) return false;
+      }
+      return true;
+    }
+
     /* ---------------- Événements ---------------- */
     spawnShell(owner, x, y, a) {
       const d = owner.d;
       this.shells.push({
         owner, x, y, vx: Math.cos(a) * d.shellSpeed, vy: Math.sin(a) * d.shellSpeed,
         dmg: d.damage, maxDist: d.range * 1.12, traveled: 0, r: 2.4 + owner.stats.puissance * 0.33,
-        alive: true, trail: [], color: owner.color,
+        alive: true, trail: [], color: owner.color, explosive: owner.explosiveNext,
       });
+      owner.explosiveNext = false;
       HB.sfx.shot(owner.stats.puissance, x);
       for (let i = 0; i < 2 + owner.stats.puissance / 3; i++) {
         const p = this.smoke(x, y, '#ccc', 0.5 + owner.stats.puissance * 0.05);
@@ -281,8 +421,9 @@
       }
     }
 
-    impact(s, onTank) {
+    impact(s, onTank, hitTank) {
       s.alive = false;
+      if (s.explosive) this.blast(s.x, s.y, s.dmg * 0.7, 64, s.owner, hitTank);
       const power = s.dmg / 58;
       HB.sfx.impact(power, onTank, s.x);
       const nSpark = 6 + Math.round(power * 14);
@@ -356,7 +497,12 @@
         survival: t.deathTime == null ? this.time : t.deathTime, behavior: t.cfg.behavior,
         stats: t.stats, killer: t.killer ? t.killer.name : (t.alive ? null : 'the zone'), id: t.cfg.id,
       }));
-      return { list, duration: this.time, winner: this.winner ? this.winner.name : null, seed: this.options.seed };
+      const P = this.player;
+      const player = P ? {
+        won: this.survived || this.winner === P, hp: P.alive ? P.hpRatio : 0, time: this.time, kills: P.kills,
+        accuracy: P.shots ? P.hits / P.shots : 0, alive: P.alive,
+      } : null;
+      return { list, duration: this.time, winner: this.winner ? this.winner.name : null, seed: this.options.seed, player, survived: this.survived };
     }
 
     /* ---------------- Particules ---------------- */
@@ -377,6 +523,7 @@
 
     addTrack(t) {
       const g = this.groundCtx;
+      if (!g) return;
       g.save();
       g.translate(t.x, t.y);
       g.rotate(t.angle);
@@ -389,6 +536,7 @@
 
     scorch(x, y) {
       const g = this.groundCtx;
+      if (!g) return;
       const grd = g.createRadialGradient(x, y, 2, x, y, 34);
       grd.addColorStop(0, 'rgba(15,10,5,0.55)');
       grd.addColorStop(1, 'rgba(15,10,5,0)');
@@ -496,6 +644,17 @@
         ctx.restore();
       }
 
+      // Mines (au sol, discrètes, voyant clignotant de la couleur du poseur)
+      for (const m of this.mines) {
+        ctx.fillStyle = 'rgba(25,25,25,0.85)';
+        ctx.beginPath(); ctx.arc(m.x, m.y, 6.5, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = m.owner.color; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(m.x, m.y, 6.5, 0, Math.PI * 2); ctx.stroke();
+        const on = m.armT <= 0 && Math.sin(this.time * 9 + m.x) > 0;
+        ctx.fillStyle = on ? '#ff3b3b' : '#5a1a1a';
+        ctx.beginPath(); ctx.arc(m.x, m.y, 2, 0, Math.PI * 2); ctx.fill();
+      }
+
       // Épaves, puis tanks vivants
       for (const t of this.tanks) if (!t.alive) t.draw(ctx);
       ctx.drawImage(this.walls, 0, 0);
@@ -513,7 +672,11 @@
           ctx.lineTo(s.x, s.y);
           ctx.stroke();
         }
-        ctx.fillStyle = '#fff4c2';
+        if (s.explosive) {
+          ctx.fillStyle = 'rgba(255,140,40,0.35)';
+          ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 2.4, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.fillStyle = s.explosive ? '#ffb347' : '#fff4c2';
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = s.color;
         ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 0.55, 0, Math.PI * 2); ctx.fill();
@@ -545,6 +708,21 @@
         }
       }
       ctx.globalAlpha = 1;
+
+      // Nuages de fumée (au-dessus des tanks : ils les cachent vraiment)
+      for (const s of this.smokes) {
+        const fade = Math.min(1, s.t / 0.8, (s.max - s.t) / 0.3 + 0.3);
+        for (const p of s.puffs) {
+          const wob = Math.sin(this.time * 1.5 + p.ph) * 4;
+          const px = s.x + p.dx * s.r + wob, py = s.y + p.dy * s.r - wob * 0.5;
+          const pr = s.r * p.s;
+          const grd = ctx.createRadialGradient(px, py, 0, px, py, pr);
+          grd.addColorStop(0, `rgba(205,205,200,${0.75 * fade})`);
+          grd.addColorStop(1, 'rgba(205,205,200,0)');
+          ctx.fillStyle = grd;
+          ctx.beginPath(); ctx.arc(px, py, pr, 0, Math.PI * 2); ctx.fill();
+        }
+      }
 
       // Zone mortelle
       const z = this.zone;
@@ -604,6 +782,15 @@
         const rl = 1 - clamp(t.reloadT / t.d.reload, 0, 1);
         ctx.fillStyle = rl >= 1 ? '#9ad7ff' : 'rgba(154,215,255,0.5)';
         ctx.fillRect(bx, by + 5, bw * rl, 1.5);
+        // Modules : allumés quand prêts
+        if (t.mods.length) {
+          ctx.font = '10px system-ui, sans-serif';
+          t.mods.forEach((m, i) => {
+            ctx.globalAlpha = (m.cd <= 0 && m.uses > 0) ? 1 : 0.3;
+            ctx.fillText(m.def.icon, t.x + 26 + i * 12, y + 8);
+          });
+          ctx.globalAlpha = 1;
+        }
         if (sel === t) {
           ctx.font = '10px system-ui, sans-serif';
           ctx.fillStyle = '#ffe9a8';

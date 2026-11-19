@@ -9,23 +9,31 @@
 <body>
 <div id="app">
 
+  <header class="topbar" id="topbar">
+    <h1>LUCKY<span>TANK</span></h1>
+    <nav class="tabs" id="nav">
+      <button data-nav="free">⚔️ Free battle</button>
+      <button data-nav="challenges">🏆 Challenges <span id="starCount" class="star-count"></span></button>
+    </nav>
+    <p class="tag">Build your tank before the battle. Then it fights on its own.</p>
+    <div class="sound"><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
+  </header>
+
   <!-- ===================== GARAGE ===================== -->
   <section id="garage" class="screen active">
-    <header class="topbar">
-      <h1>LUCKY<span>TANK</span></h1>
-      <p class="tag">Build your tank before the battle. Then it fights on its own.</p>
-      <div class="sound"><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
-    </header>
 
     <div class="garage-grid">
       <aside class="panel roster-panel">
-        <h2>Tanks in battle <span id="rosterCount" class="muted"></span></h2>
-        <div id="roster"></div>
-        <div class="roster-actions">
-          <button id="addCustom" class="btn">+ Custom tank</button>
-          <button id="addRandom" class="btn">🎲 Random tank</button>
+        <div id="rosterBlock">
+          <h2>Tanks in battle <span id="rosterCount" class="muted"></span></h2>
+          <div id="roster"></div>
+          <div class="roster-actions">
+            <button id="addCustom" class="btn">+ Custom tank</button>
+            <button id="addRandom" class="btn">🎲 Random tank</button>
+          </div>
+          <p class="hint">Each player can build their own tank. Tanks marked 🎲 were built at random.</p>
         </div>
-        <p class="hint">Each player can build their own tank. Tanks marked 🎲 were built at random.</p>
+        <div id="briefing" hidden></div>
       </aside>
 
       <main class="panel editor-panel">
@@ -55,6 +63,9 @@
         </div>
         <div id="statRows" class="stats"></div>
 
+        <h3>Modules <span class="muted sub-h">up to 2 · they cost points · your pilot fires them on its own</span></h3>
+        <div id="modules"></div>
+
         <h3>Autopilot</h3>
         <div id="behaviors" class="behaviors"></div>
         <div class="retreat">
@@ -69,16 +80,33 @@
         <div id="derived"></div>
         <ul id="notes" class="notes"></ul>
 
-        <h2>Battlefield</h2>
-        <div class="opt col">
-          <span>Obstacles</span>
-          <div id="densityBtns" class="seg"></div>
+        <div id="fieldOpts">
+          <h2>Battlefield</h2>
+          <div class="opt col">
+            <span>Obstacles</span>
+            <div id="densityBtns" class="seg"></div>
+          </div>
+          <label class="opt toggle"><span>Repair kits</span><input type="checkbox" id="optPickups"><i></i></label>
+          <label class="opt toggle"><span>Death zone (after 60 s)</span><input type="checkbox" id="optZone"><i></i></label>
+          <p class="hint">A new random map is generated for every battle.</p>
         </div>
-        <label class="opt toggle"><span>Repair kits</span><input type="checkbox" id="optPickups"><i></i></label>
-        <label class="opt toggle"><span>Death zone (after 60 s)</span><input type="checkbox" id="optZone"><i></i></label>
-        <p class="hint">A new random map is generated for every battle.</p>
+        <div id="objectives" hidden></div>
         <button id="launch" class="btn launch">START BATTLE ▶</button>
       </aside>
+    </div>
+  </section>
+
+  <!-- ===================== DÉFIS ===================== -->
+  <section id="challenges" class="screen">
+    <div class="ch-wrap">
+      <div class="ch-head">
+        <div>
+          <h2>Challenges <span id="chStars" class="star-count"></span></h2>
+          <p class="muted">Win a challenge to open the next one. Some of them unlock new modules for your tanks.</p>
+        </div>
+        <button id="resetProgress" class="btn small ghost">Reset progress</button>
+      </div>
+      <div id="chGrid" class="ch-grid"></div>
     </div>
   </section>
 
@@ -110,6 +138,8 @@
       <div class="results-box">
         <h2 id="resTitle"></h2>
         <p id="resSub" class="muted"></p>
+        <div id="resStars" class="res-stars" hidden></div>
+        <div id="resUnlock" class="res-unlock" hidden></div>
         <table class="res-table">
           <thead><tr><th>#</th><th>Tank</th><th>Pilot</th><th>Kills</th><th>Damage</th><th>Accuracy</th><th>Survived</th><th>Killed by</th></tr></thead>
           <tbody id="resBody"></tbody>
@@ -118,6 +148,10 @@
           <button id="resReplay" class="btn">↻ Rematch (same map)</button>
           <button id="resNew" class="btn">🎲 New map</button>
           <button id="resGarage" class="btn ghost">◀ Back to garage</button>
+          <button id="resRetry" class="btn" hidden>↻ Retry</button>
+          <button id="resNext" class="btn launch-sm" hidden>Next challenge ▶</button>
+          <button id="resEdit" class="btn" hidden>✎ Edit my tank</button>
+          <button id="resList" class="btn ghost" hidden>◀ Challenges</button>
         </div>
       </div>
     </div>
@@ -127,6 +161,7 @@
 <script src="js/config.js"></script>
 <script src="js/map.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/challenges.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/tank.js"></script>
 <script src="js/game.js"></script>

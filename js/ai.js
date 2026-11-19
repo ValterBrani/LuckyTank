@@ -36,7 +36,7 @@
 
     update(dt, game) {
       const t = this.t, map = game.map, c = t.control;
-      const enemies = game.tanks.filter(o => o.alive && o !== t);
+      const enemies = game.tanks.filter(o => o.alive && HB.isEnemy(t, o));
       if (!enemies.length) {
         c.move = 0; c.turn = 0; c.fire = false;
         this.state = 'Victory!';
@@ -53,7 +53,7 @@
       const range = t.d.range;
       const dT = dist(t.x, t.y, tg.x, tg.y);
       const crateOk = this.behKey === 'agressif';
-      const shotOnTarget = map.hasLos(t.x, t.y, tg.x, tg.y, !crateOk);
+      const shotOnTarget = game.canSee(t.x, t.y, tg.x, tg.y, !crateOk);
 
       // ---------- 2. Intention de déplacement ----------
       let goal = null, dir = null, allowReverse = false, speedScale = 1;
@@ -106,6 +106,11 @@
         }
       }
 
+      // Intention du moment (sert aux conditions des modules ; l'esquive ne la masque pas)
+      const st0 = this.state;
+      this.mode = (st0 === 'Retreating' || st0 === 'Going to repair' || st0 === 'Escaping the zone' || st0 === 'Grabbing a kit') ? 'retreat'
+        : (st0 === 'Chasing' || st0 === 'Charging' || st0 === 'Ramming!') ? 'chase' : 'fight';
+
       // Change de sens d'orbite de temps en temps (imprévisible)
       this.strafeT -= dt;
       if (this.strafeT <= 0) { this.strafeT = 1.8 + Math.random() * 2.5; if (Math.random() < 0.6) this.strafeDir *= -1; }
@@ -121,6 +126,7 @@
 
       // ---------- 4. Esquive des obus ----------
       const dodge = this.dodgeVector(game);
+      this.threat = !!dodge;
       if (dodge) {
         let vx = dodge.x * 1.6, vy = dodge.y * 1.6;
         if (dirAngle !== null) { vx += Math.cos(dirAngle); vy += Math.sin(dirAngle); }
@@ -143,6 +149,51 @@
 
       // ---------- 6. Visée et tir ----------
       this.aimAndFire(enemies, game, dt, tg, crateOk);
+
+      // ---------- 7. Modules ----------
+      if (t.mods.length) this.useModules(game, enemies, nearest);
+    }
+
+    /* Déclenche les modules dont la condition (choisie dans le garage) est remplie */
+    useModules(game, enemies, nearest) {
+      const t = this.t;
+      const nearD = nearest ? dist(t.x, t.y, nearest.x, nearest.y) : Infinity;
+      const aimingAtMe = enemies.filter(e => e.brain.aimTarget === t).length;
+      for (const m of t.mods) {
+        if (m.cd > 0 || m.uses <= 0) continue;
+        if (!this.triggerMet(m.trigger, nearD, aimingAtMe)) continue;
+        if (!this.worthIt(m.id, nearD, aimingAtMe)) continue;
+        game.activateModule(t, m);
+      }
+    }
+
+    triggerMet(trigger, nearD, aimingAtMe) {
+      const t = this.t;
+      switch (trigger) {
+        case 'ready': return true;
+        case 'incoming': return this.threat;
+        case 'hp50': return t.hpRatio < 0.5;
+        case 'hp25': return t.hpRatio < 0.25;
+        case 'enemyClose': return nearD < 170;
+        case 'targeted2': return aimingAtMe >= 2;
+        case 'retreating': return this.mode === 'retreat';
+        case 'chasing': return this.mode === 'chase';
+        case 'inSight': return !!this.aimTarget && t.reloadT < 0.3;
+        default: return false;
+      }
+    }
+
+    /* Garde-fou de bon sens : pas de module gaspillé dans le vide */
+    worthIt(id, nearD, aimingAtMe) {
+      const t = this.t;
+      switch (id) {
+        case 'reparation': return t.hpRatio < 0.8;
+        case 'explosif': return !t.explosiveNext;
+        case 'mines': return nearD < 450;
+        case 'fumee': return aimingAtMe > 0 || nearD < 350;
+        case 'bouclier': return this.threat || aimingAtMe > 0 || nearD < 300;
+        default: return true;
+      }
     }
 
     chooseTarget(enemies, game) {
@@ -153,7 +204,7 @@
         let s = this.beh.target === 'weakest' ? e.hp * 1.5 + d * 0.35 : d;
         if (e === t.lastAttacker && game.time - t.lastHitT < 3) s *= 0.65; // riposte
         if (e === this.target) s *= 0.85; // garde sa cible (hystérésis)
-        if (this.behKey === 'tireur' && game.map.hasLos(t.x, t.y, e.x, e.y)) s *= 0.7;
+        if (this.behKey === 'tireur' && game.canSee(t.x, t.y, e.x, e.y)) s *= 0.7;
         if (s < bs) { bs = s; best = e; }
       }
       return best;
@@ -275,7 +326,7 @@
     aimAndFire(enemies, game, dt, tg, crateOk) {
       const t = this.t, c = t.control, map = game.map;
       const range = t.d.range;
-      const canShoot = e => dist(t.x, t.y, e.x, e.y) <= range * 1.02 && map.hasLos(t.x, t.y, e.x, e.y, !crateOk);
+      const canShoot = e => dist(t.x, t.y, e.x, e.y) <= range * 1.02 && game.canSee(t.x, t.y, e.x, e.y, !crateOk);
       let aimT = canShoot(tg) ? tg : null;
       if (!aimT) {
         let bd = Infinity;
