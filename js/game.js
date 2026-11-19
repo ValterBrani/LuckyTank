@@ -11,9 +11,10 @@
     constructor(canvas, roster, options, callbacks = {}) {
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
+      this.options = Object.assign({ seed: 1, density: 'normale', pickups: true, zone: true }, options);
+      HB.setOrientation(!!this.options.portrait);
       canvas.width = HB.W;
       canvas.height = HB.H;
-      this.options = Object.assign({ seed: 1, density: 'normale', pickups: true, zone: true }, options);
       this.cb = callbacks;
       this.map = new HB.GameMap(this.options.seed, this.options.density, roster.length);
       const mrng = this.map.rng;
@@ -43,8 +44,13 @@
       this.shake = 0;
       this.selected = null;
       this.pickupT = 7 + mrng() * 4;
+      // Tank "à soi" (défi : le joueur ; libre : le premier tank perso) → caméra et vibrations
+      this.focus = this.player || this.tanks[this.options.focusIndex || 0] || null;
+      // Caméra : zoom 1 centré = vue d'ensemble (rendu identique à avant)
+      this.cam = { mode: 'overview', zoom: 1, targetZoom: 1, followZoom: this.options.followZoom || 1.7, x: HB.W / 2, y: HB.H / 2, follow: null };
+      this.maxParticles = this.options.lowFx ? 350 : Infinity;
 
-      const zx = HB.W / 2 + (mrng() - 0.5) * 320, zy = HB.H / 2 + (mrng() - 0.5) * 200;
+      const zx = HB.W / 2 + (mrng() - 0.5) * HB.W * 0.25, zy = HB.H / 2 + (mrng() - 0.5) * HB.H * 0.25;
       const sc = this.map.nearestFreeCell(zx, zy);
       const maxR = Math.hypot(HB.W, HB.H) * 0.62;
       this.zone = {
@@ -78,6 +84,7 @@
         while (this.acc >= step && n < 12) { this.update(step); this.acc -= step; n++; }
         if (n >= 12) this.acc = 0;
       }
+      this.updateCamera(dt);
       this.render();
       this.hudT -= dt;
       if (this.hudT <= 0) { this.hudT = 0.1; this.cb.onHud && this.cb.onHud(this); }
@@ -169,6 +176,7 @@
         if (p.grow) p.size += p.grow * dt;
       }
       this.particles = this.particles.filter(p => p.life > 0);
+      if (this.particles.length > this.maxParticles) this.particles.splice(0, this.particles.length - this.maxParticles);
       for (const tx of this.texts) { tx.life -= dt; tx.y -= 22 * dt; }
       this.texts = this.texts.filter(tx => tx.life > 0);
 
@@ -197,6 +205,7 @@
         else this.winner = null;
         // Places des survivants : le vainqueur d'abord, puis par PV restants
         left.slice().sort((a, b) => (b === this.winner) - (a === this.winner) || b.hp - a.hp).forEach((t, i) => { t.place = i + 1; });
+        if (this.winner && (!P || this.winner === P)) this.haptic('win', this.winner);
         if (this.survived) {
           this.feed(`🛡️ <b style="color:${P.color}">${esc(P.name)}</b> held the line for ${this.options.survive} s!`, 'win');
           setTimeout(() => { if (!this.destroyed) HB.sfx.victory(); }, 500);
@@ -466,6 +475,7 @@
       victim.vx = victim.vy = 0;
       if (attacker && attacker !== victim) attacker.kills++;
       HB.sfx.explosion(victim.x);
+      this.haptic('kill', victim);
       // Grosse explosion
       for (let i = 0; i < 40; i++) this.particles.push(this.spark(victim.x, victim.y, i % 3 ? '#ffb347' : '#fff3b0', 300));
       for (let i = 0; i < 4; i++) this.particles.push(this.fireball(victim.x + (Math.random() - 0.5) * 20, victim.y + (Math.random() - 0.5) * 20, 22 + Math.random() * 14));
@@ -597,9 +607,64 @@
       }
     }
 
+    /* ---------------- Caméra ---------------- */
+    setFollow(t) {
+      if (!t) return this.overview();
+      this.cam.mode = 'follow';
+      this.cam.follow = t;
+      this.cam.targetZoom = this.cam.followZoom;
+    }
+    overview() {
+      this.cam.mode = 'overview';
+      this.cam.follow = null;
+      this.cam.targetZoom = 1;
+    }
+    clampCam() {
+      const c = this.cam;
+      const hw = HB.W / (2 * c.zoom), hh = HB.H / (2 * c.zoom);
+      c.x = clamp(c.x, hw, HB.W - hw);
+      c.y = clamp(c.y, hh, HB.H - hh);
+    }
+    updateCamera(dt) {
+      const c = this.cam;
+      if (c.mode === 'follow') {
+        let t = c.follow;
+        if (t && !t.alive) {
+          // Le tank suivi est détruit : on suit son vainqueur, sinon vue d'ensemble
+          const next = (t.killer && t.killer.alive) ? t.killer : (this.winner && this.winner.alive ? this.winner : null);
+          if (next) { c.follow = next; t = next; } else { this.overview(); t = null; }
+        }
+        if (t) {
+          const k = Math.min(1, dt * 5);
+          c.x += (t.x - c.x) * k;
+          c.y += (t.y - c.y) * k;
+        }
+      } else if (c.mode === 'overview') {
+        const k = Math.min(1, dt * 6);
+        c.x += (HB.W / 2 - c.x) * k;
+        c.y += (HB.H / 2 - c.y) * k;
+      }
+      if (c.mode !== 'free') c.zoom += (c.targetZoom - c.zoom) * Math.min(1, dt * 6);
+      if (Math.abs(c.zoom - 1) < 0.002 && c.mode === 'overview') { c.zoom = 1; }
+      this.clampCam();
+    }
+    /* Coordonnées du canvas (pixels internes) → coordonnées de la carte */
+    toWorld(cx, cy) {
+      const c = this.cam;
+      return { x: (cx - HB.W / 2) / c.zoom + c.x, y: (cy - HB.H / 2) / c.zoom + c.y };
+    }
+
+    haptic(kind, tank) { this.cb.onHaptic && this.cb.onHaptic(kind, tank); }
+
     render() {
       const ctx = this.ctx;
       ctx.save();
+      const c = this.cam;
+      if (c.zoom !== 1 || c.x !== HB.W / 2 || c.y !== HB.H / 2) {
+        ctx.fillStyle = '#0f1114';
+        ctx.fillRect(0, 0, HB.W, HB.H);
+        ctx.setTransform(c.zoom, 0, 0, c.zoom, HB.W / 2 - c.x * c.zoom, HB.H / 2 - c.y * c.zoom);
+      }
       if (this.shake > 0.1) ctx.translate((Math.random() - 0.5) * this.shake, (Math.random() - 0.5) * this.shake);
       ctx.drawImage(this.ground, 0, 0);
 

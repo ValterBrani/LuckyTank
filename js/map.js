@@ -6,10 +6,16 @@
   const HB = window.HB;
 
   HB.CELL = 32;
-  HB.COLS = 40;
-  HB.ROWS = 25;
-  HB.W = HB.CELL * HB.COLS; // 1280
-  HB.H = HB.CELL * HB.ROWS; // 800
+  /* Paysage 40×25 (1280×800) par défaut ; portrait 25×40 sur téléphone tenu droit.
+   * Même nombre de cases dans les deux cas : l'équilibrage ne change pas. */
+  HB.setOrientation = portrait => {
+    HB.COLS = portrait ? 25 : 40;
+    HB.ROWS = portrait ? 40 : 25;
+    HB.W = HB.CELL * HB.COLS;
+    HB.H = HB.CELL * HB.ROWS;
+    HB.portrait = !!portrait;
+  };
+  HB.setOrientation(false);
 
   const EMPTY = 0, WALL = 1, CRATE = 2;
   HB.T = { EMPTY, WALL, CRATE };

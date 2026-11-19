@@ -21,6 +21,20 @@
     picking: null,     // emplacement de module en cours de choix
   };
   let screen = 'garage'; // 'garage' | 'challenges' | 'battle'
+
+  /* Téléphone / tablette : pointeur tactile. "Compact" = mise en page téléphone (mêmes règles que le CSS). */
+  HB.isTouch = window.matchMedia('(pointer: coarse)').matches;
+  const compactMQ = window.matchMedia('(max-width: 760px), (pointer: coarse) and (max-height: 520px)');
+  const isCompact = () => compactMQ.matches;
+  document.body.classList.toggle('touch', HB.isTouch);
+  if (HB.isTouch) {
+    document.getElementById('battleHint').textContent =
+      'Tap a tank to follow it with the camera. Pinch to zoom, drag to look around, double-tap to see the whole map. 🎥 switches between follow and overview.';
+  }
+  function setMTab(tab) {
+    document.body.dataset.mtab = tab;
+    document.querySelectorAll('#mtabs button').forEach(b => b.classList.toggle('on', b.dataset.mtab === tab));
+  }
   let game = null;
   let gameMode = 'free';
 
@@ -195,6 +209,7 @@
   /* ---------------- Panneau gauche : roster ou briefing ---------------- */
   function renderLeft() {
     const ch = currentChallenge();
+    $('#mtabTanks').textContent = ch ? 'Briefing' : 'Tanks';
     $('#rosterBlock').hidden = !!ch;
     $('#briefing').hidden = !ch;
     if (ch) renderBriefing(ch); else renderRoster();
@@ -283,6 +298,9 @@
     const pl = $('#pointsLeft');
     pl.textContent = left;
     pl.classList.toggle('zero', left === 0);
+    $('#mPoints').textContent = left;
+    $('#mPoints').classList.toggle('zero', left === 0);
+    $('#mBudget').textContent = `/ ${R.budget} pts left`;
     $('#budgetMax').textContent = R.budget;
     $('#budgetFill').style.width = (100 * (R.budget - left) / R.budget) + '%';
 
@@ -377,6 +395,7 @@
     $('#fieldOpts').hidden = !!ch;
     $('#objectives').hidden = !ch;
     $('#launch').textContent = ch ? 'START CHALLENGE ▶' : 'START BATTLE ▶';
+    $('#mLaunch').textContent = ch ? 'START CHALLENGE ▶' : 'START BATTLE ▶';
     if (ch) {
       const flags = HB.progress.flags(ch.id);
       $('#objectives').innerHTML = `<h2>Objectives</h2>
@@ -427,6 +446,7 @@
     state.mode = 'challenge';
     state.chId = cid;
     state.picking = null;
+    setMTab('tanks');
     goScreen('garage');
   }
 
@@ -466,7 +486,7 @@
     $('#nav').addEventListener('click', e => {
       const b = e.target.closest('[data-nav]');
       if (!b) return;
-      if (b.dataset.nav === 'free') { state.mode = 'free'; state.picking = null; goScreen('garage'); }
+      if (b.dataset.nav === 'free') { state.mode = 'free'; state.picking = null; setMTab('build'); goScreen('garage'); }
       else goScreen('challenges');
     });
 
@@ -535,6 +555,7 @@
     $('#statRows').addEventListener('click', e => {
       const row = e.target.closest('.stat-row');
       if (!row) return;
+      if (e.target.closest('.stat-label')) { row.classList.toggle('show-desc'); return; }
       const key = row.dataset.key, t = cur(), lvl = t.stats[key], R = rules();
       const act = e.target.closest('button')?.dataset.act;
       const pip = e.target.closest('i[data-lvl]');
@@ -614,9 +635,17 @@
     $('#optPickups').addEventListener('change', e => { state.options.pickups = e.target.checked; save(); });
     $('#optZone').addEventListener('change', e => { state.options.zone = e.target.checked; save(); });
 
-    $('#launch').addEventListener('click', () => {
+    const go = () => {
       if (state.mode === 'challenge') startChallenge();
       else startBattle((Math.random() * 1e9) >>> 0);
+    };
+    $('#launch').addEventListener('click', go);
+    $('#mLaunch').addEventListener('click', go);
+    $('#mtabs').addEventListener('click', e => {
+      const b = e.target.closest('[data-mtab]');
+      if (!b) return;
+      setMTab(b.dataset.mtab);
+      window.scrollTo(0, 0);
     });
 
     $('#chGrid').addEventListener('click', e => {
@@ -654,8 +683,17 @@
     $('#feed').innerHTML = '';
     feedCount = 0;
     if (game) game.destroy();
-    game = new HB.Game($('#battleCanvas'), roster, opts, { onHud: renderHud, onFeed: addFeed, onEnd: showResults });
+    // Téléphone : carte en portrait si tenu droit, moins de particules, caméra qui suit
+    if (HB.isTouch) {
+      opts.portrait = window.innerHeight > window.innerWidth;
+      opts.lowFx = true;
+      opts.followZoom = opts.portrait ? 1.7 : 1.6;
+    }
+    if (opts.focusIndex == null) opts.focusIndex = Math.max(0, roster.findIndex(t => !t.random));
+    game = new HB.Game($('#battleCanvas'), roster, opts, { onHud: renderHud, onFeed: addFeed, onEnd: showResults, onHaptic });
     game.speed = state.speed || 1;
+    if (HB.isTouch && game.focus) game.setFollow(game.focus);
+    $('#battleSide').classList.remove('open');
     buildScoreboard();
     setSpeedButtons();
     addFeed(intro);
@@ -730,6 +768,10 @@
       r.k.innerHTML = `⚔ ${t.kills}<br><span class="muted">${Math.round(t.damageDealt)} dmg</span>`;
       r.mods.innerHTML = t.mods.map(m => `<span class="${m.cd <= 0 && m.uses > 0 ? 'ready' : ''}" title="${m.def.label}">${m.def.icon}</span>`).join('');
     }
+    const alive = g.tanks.filter(t => t.alive).length;
+    const f = g.focus;
+    $('#sbSummary').textContent = `Tanks · ${alive}/${g.tanks.length} alive` + (f ? ` · ${f.name} ${f.alive ? Math.ceil(f.hp) + ' HP' : '💀'}` : '');
+    $('#camBtn').classList.toggle('on', g.cam.mode === 'follow');
     const surv = g.options.survive;
     $('#clock').textContent = surv && !g.over ? fmtTime(Math.max(0, surv - g.time)) : fmtTime(g.time);
     const zi = $('#zoneInfo');
@@ -857,11 +899,12 @@
       openChallenge(next.id);
     });
 
-    const cv = $('#battleCanvas');
-    cv.addEventListener('click', e => {
+    bindCanvas();
+    $('#sbHandle').addEventListener('click', () => $('#battleSide').classList.toggle('open'));
+    $('#camBtn').addEventListener('click', () => {
       if (!game) return;
-      const r = cv.getBoundingClientRect();
-      game.pick((e.clientX - r.left) * HB.W / r.width, (e.clientY - r.top) * HB.H / r.height);
+      if (game.cam.mode === 'follow') game.overview();
+      else game.setFollow(game.selected && game.selected.alive ? game.selected : game.focus);
       renderHud(game);
     });
 
@@ -873,6 +916,124 @@
       else if (e.key === '2') setSpeed(2);
       else if (e.key === '3') setSpeed(4);
       else if (e.key === 'Escape') game.selected = null;
+    });
+  }
+
+  /* ---------------- Gestes sur la carte ----------------
+   * Clic / toucher : sélectionner un tank (sur téléphone, la caméra le suit)
+   * Pincer : zoomer · Glisser (zoomé) : se déplacer · Double toucher : vue d'ensemble */
+  function bindCanvas() {
+    const cv = $('#battleCanvas');
+    const pts = new Map();
+    let pinch = null, drag = null, lastTap = { t: 0, x: 0, y: 0 };
+    const toCanvas = e => {
+      const r = cv.getBoundingClientRect();
+      return { x: (e.clientX - r.left) * HB.W / r.width, y: (e.clientY - r.top) * HB.H / r.height, k: HB.W / r.width };
+    };
+    cv.addEventListener('pointerdown', e => {
+      if (!game) return;
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      const p = toCanvas(e);
+      pts.set(e.pointerId, p);
+      if (pts.size === 2) {
+        const [a, b] = [...pts.values()];
+        pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: game.cam.zoom, mid: game.toWorld((a.x + b.x) / 2, (a.y + b.y) / 2) };
+        drag = null;
+      } else if (pts.size === 1) {
+        drag = { x0: p.x, y0: p.y, last: p, t0: performance.now(), moved: false };
+      }
+    });
+    cv.addEventListener('pointermove', e => {
+      if (!game || !pts.has(e.pointerId)) return;
+      const p = toCanvas(e);
+      pts.set(e.pointerId, p);
+      const c = game.cam;
+      if (pinch && pts.size >= 2) {
+        const [a, b] = [...pts.values()];
+        const z = HB.clamp(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0, 1, 3.5);
+        if (c.mode === 'follow') { c.followZoom = c.targetZoom = c.zoom = z; }
+        else if (z <= 1.02) { game.overview(); }
+        else {
+          c.mode = 'free'; c.zoom = z;
+          c.x = pinch.mid.x - ((a.x + b.x) / 2 - HB.W / 2) / z;
+          c.y = pinch.mid.y - ((a.y + b.y) / 2 - HB.H / 2) / z;
+        }
+        game.clampCam();
+        return;
+      }
+      if (drag) {
+        if (!drag.moved && Math.hypot(p.x - drag.x0, p.y - drag.y0) > 12 * p.k) drag.moved = true;
+        if (drag.moved && c.zoom > 1.02) {
+          c.mode = 'free'; c.follow = null;
+          c.x -= (p.x - drag.last.x) / c.zoom;
+          c.y -= (p.y - drag.last.y) / c.zoom;
+          game.clampCam();
+        }
+        drag.last = p;
+      }
+    });
+    cv.addEventListener('pointerup', e => {
+      if (!game) return;
+      const had = pts.delete(e.pointerId);
+      if (pinch) { if (pts.size < 2) { pinch = null; drag = null; } return; }
+      const d = drag;
+      drag = null;
+      if (!had || !d || d.moved || performance.now() - d.t0 > 800) return;
+      const now = performance.now();
+      if (now - lastTap.t < 300 && Math.hypot(d.x0 - lastTap.x, d.y0 - lastTap.y) < 40 * d.last.k) {
+        game.overview();
+        lastTap.t = 0;
+        renderHud(game);
+        return;
+      }
+      lastTap = { t: now, x: d.x0, y: d.y0 };
+      const w = game.toWorld(d.x0, d.y0);
+      const t = game.pick(w.x, w.y);
+      if (t && (HB.isTouch || game.cam.mode === 'follow')) game.setFollow(t);
+      renderHud(game);
+    });
+    cv.addEventListener('pointercancel', e => { pts.delete(e.pointerId); pinch = null; drag = null; });
+  }
+
+  /* ---------------- Vibrations (téléphone) ---------------- */
+  let lastVib = 0;
+  function onHaptic(kind, tank) {
+    if (!HB.isTouch || !navigator.vibrate || !HB.sfx.audible || !game) return;
+    const me = game.focus;
+    let pattern = null;
+    if (kind === 'hit' && tank === me) pattern = 25;
+    else if (kind === 'kill') pattern = tank === me ? [80, 40, 140] : 30;
+    else if (kind === 'win' && tank === me) pattern = [60, 40, 60, 40, 180];
+    if (!pattern) return;
+    const now = performance.now();
+    if (kind !== 'win' && now - lastVib < 150) return;
+    lastVib = now;
+    try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- Application installable (PWA) ---------------- */
+  function setupPwa() {
+    if (!/^https?:$/.test(location.protocol)) return; // rien en local (file://)
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = 'manifest.webmanifest';
+    document.head.appendChild(link);
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* hébergement sans SW */ }); });
+    }
+    let deferred = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      if (!HB.isTouch) return; // sur PC, on laisse le navigateur gérer
+      e.preventDefault();
+      deferred = e;
+      $('#installBtn').hidden = false;
+    });
+    $('#installBtn').addEventListener('click', async () => {
+      if (!deferred) return;
+      deferred.prompt();
+      try { await deferred.userChoice; } catch (e) { /* ignore */ }
+      deferred = null;
+      $('#installBtn').hidden = true;
     });
   }
 
@@ -908,6 +1069,8 @@
   }
 
   /* ---------------- Démarrage ---------------- */
+  setMTab('build');
+  setupPwa();
   load();
   bindSound();
   renderSound();

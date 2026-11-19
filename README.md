@@ -8,6 +8,16 @@ A battle of **autonomous** tanks: you build your tank before the match, then it 
 
 Double-click `index.html` (Chrome, Edge or Firefox). No install, no server, no build step.
 
+### On a phone
+
+The game adapts to phones (the desktop version is unchanged):
+
+- **Garage in tabs** (Tanks / Stats / Modules & pilot / Specs) with a fixed bar showing the points left and the Start button. Tap a stat name to see its description.
+- **Portrait map** when the phone is held upright (same number of cells, same balance).
+- **Camera** that follows your tank: tap a tank to follow it, pinch to zoom, drag to look around, double-tap for the whole map, 🎥 to switch.
+- **Scoreboard drawer** at the bottom of the screen, vibrations when your tank is hit or destroyed (Android).
+- **Installable app (PWA)**: on the GitHub Pages site, use *Install* (Android) or *Share → Add to Home Screen* (iPhone). It then runs full screen and offline.
+
 ## How it works
 
 1. **Garage**: each tank gets **30 points** to spread across 5 stats (level 1 to 10).
@@ -78,7 +88,8 @@ Every tank finds its way around obstacles (A*), leads its shots on moving target
 | `js/game.js` | Game loop, shells, effects, death zone, rendering |
 | `js/audio.js` | Sound effects (Web Audio) |
 | `js/challenges.js` | Challenges, objectives, progress and unlocks |
-| `js/ui.js` | Garage, scoreboard, results |
+| `js/ui.js` | Garage, scoreboard, results, phone layout and touch gestures |
+| `sw.js`, `manifest.webmanifest`, `icons/` | Installable app (PWA) and offline mode |
 
 Garage tanks, challenge progress and sound settings are saved in the browser (localStorage).
 

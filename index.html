@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#15181d">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LuckyTank">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <title>LuckyTank — autonomous tank battles</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -16,11 +23,18 @@
       <button data-nav="challenges">🏆 Challenges <span id="starCount" class="star-count"></span></button>
     </nav>
     <p class="tag">Build your tank before the battle. Then it fights on its own.</p>
-    <div class="sound"><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
+    <div class="sound"><button id="installBtn" class="btn small touch-only" hidden>📲 Install</button><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
   </header>
 
   <!-- ===================== GARAGE ===================== -->
   <section id="garage" class="screen active">
+    <!-- Onglets du garage (téléphone uniquement) -->
+    <nav class="mtabs" id="mtabs">
+      <button data-mtab="tanks" id="mtabTanks">Tanks</button>
+      <button data-mtab="build">Stats</button>
+      <button data-mtab="pilot">Modules &amp; pilot</button>
+      <button data-mtab="specs">Specs</button>
+    </nav>
 
     <div class="garage-grid">
       <aside class="panel roster-panel">
@@ -37,6 +51,7 @@
       </aside>
 
       <main class="panel editor-panel">
+        <div id="secBuild">
         <div class="editor-head">
           <canvas id="preview" width="260" height="170"></canvas>
           <div class="identity">
@@ -62,7 +77,9 @@
           <span class="tier t3">lvl 8-10 = 3 pts</span>
         </div>
         <div id="statRows" class="stats"></div>
+        </div>
 
+        <div id="secPilot">
         <h3>Modules <span class="muted sub-h">up to 2 · they cost points · your pilot fires them on its own</span></h3>
         <div id="modules"></div>
 
@@ -71,6 +88,7 @@
         <div class="retreat">
           <span>Retreat to repair:</span>
           <div id="retreatBtns" class="seg"></div>
+        </div>
         </div>
       </main>
 
@@ -93,6 +111,11 @@
         <div id="objectives" hidden></div>
         <button id="launch" class="btn launch">START BATTLE ▶</button>
       </aside>
+    </div>
+    <!-- Barre fixe en bas (téléphone uniquement) -->
+    <div class="mbar" id="mbar">
+      <div class="mpts"><span id="mPoints">0</span><small id="mBudget">/ 30 pts left</small></div>
+      <button id="mLaunch" class="btn launch">START ▶</button>
     </div>
   </section>
 
@@ -122,15 +145,17 @@
       </div>
       <div id="clock" class="clock">0:00</div>
       <div id="zoneInfo" class="zone-info"></div>
+      <button id="camBtn" class="btn small touch-only cam-btn" title="Camera: follow / overview">🎥</button>
       <div class="sound"><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
     </div>
     <div class="battle-grid">
       <div class="canvas-wrap"><canvas id="battleCanvas" width="1280" height="800"></canvas></div>
-      <aside class="battle-side">
+      <aside class="battle-side" id="battleSide">
+        <button id="sbHandle" class="drawer-handle"><span class="grip"></span><span id="sbSummary">Tanks</span><span class="arrow">▲</span></button>
         <div id="scoreboard"></div>
         <h3>Battle log</h3>
         <div id="feed"></div>
-        <p class="hint">Click a tank to see its range, its target, its path and what it is doing.</p>
+        <p class="hint" id="battleHint">Click a tank to see its range, its target, its path and what it is doing.</p>
       </aside>
     </div>
 
@@ -140,10 +165,10 @@
         <p id="resSub" class="muted"></p>
         <div id="resStars" class="res-stars" hidden></div>
         <div id="resUnlock" class="res-unlock" hidden></div>
-        <table class="res-table">
+        <div class="res-scroll"><table class="res-table">
           <thead><tr><th>#</th><th>Tank</th><th>Pilot</th><th>Kills</th><th>Damage</th><th>Accuracy</th><th>Survived</th><th>Killed by</th></tr></thead>
           <tbody id="resBody"></tbody>
-        </table>
+        </table></div>
         <div class="res-btns">
           <button id="resReplay" class="btn">↻ Rematch (same map)</button>
           <button id="resNew" class="btn">🎲 New map</button>
