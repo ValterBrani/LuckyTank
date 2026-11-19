@@ -2,7 +2,7 @@
 /* =========================================================================
  * Sons générés en direct (Web Audio) : aucun fichier audio nécessaire.
  * HB.sfx.shot(), .impact(), .explosion(), .crate(), .ram(), .pickup(),
- * .alarm(), .victory(), .start()
+ * .alarm(), .victory(), .start(), .ability(), .unlock()
  * ========================================================================= */
 (function () {
   const HB = window.HB;
@@ -213,6 +213,44 @@
       this.tone(out, t, { wave: 'sawtooth', freq: 42, freqEnd: 110, peak: 0.22, attack: 0.15, decay: 0.8, filter: 380 });
       this.tone(out, t + 0.05, { wave: 'sawtooth', freq: 55, freqEnd: 140, peak: 0.15, attack: 0.15, decay: 0.7, filter: 420 });
       this.burst(out, t, { freq: 500, freqEnd: 200, peak: 0.12, attack: 0.1, decay: 0.8 });
+    }
+
+    /* Modules activés */
+    ability(id, x) {
+      if (!this.ok('ab-' + id, 0.15, 0.9)) return;
+      const t = this.ctx.currentTime, out = this.out(x);
+      switch (id) {
+        case 'nitro':
+          this.burst(out, t, { type: 'bandpass', freq: 400, freqEnd: 2600, q: 1.5, peak: 0.35, attack: 0.05, decay: 0.45 });
+          this.tone(out, t, { wave: 'sawtooth', freq: 70, freqEnd: 180, peak: 0.12, attack: 0.03, decay: 0.4, filter: 600 });
+          break;
+        case 'bouclier':
+          [440, 660, 880].forEach((f, i) => this.tone(out, t + i * 0.04, { wave: 'triangle', freq: f, freqEnd: f * 1.5, peak: 0.08, decay: 0.35 }));
+          break;
+        case 'mines':
+          this.tone(out, t, { wave: 'square', freq: 1300, peak: 0.05, decay: 0.04, filter: 3000 });
+          this.tone(out, t + 0.09, { wave: 'square', freq: 1300, peak: 0.05, decay: 0.04, filter: 3000 });
+          this.burst(out, t, { type: 'bandpass', freq: 900, q: 4, peak: 0.12, decay: 0.05 });
+          break;
+        case 'fumee':
+          this.burst(out, t, { type: 'highpass', freq: 1800, peak: 0.22, attack: 0.04, decay: 0.9 });
+          this.burst(out, t, { freq: 500, freqEnd: 200, peak: 0.2, decay: 0.3 });
+          break;
+        case 'reparation':
+          [392, 523, 659, 784].forEach((f, i) => this.tone(out, t + i * 0.06, { wave: 'triangle', freq: f, peak: 0.12, decay: 0.16 }));
+          break;
+        case 'explosif':
+          this.burst(out, t, { type: 'bandpass', freq: 2500, q: 5, peak: 0.15, decay: 0.03 });
+          this.tone(out, t + 0.05, { wave: 'square', freq: 220, freqEnd: 330, peak: 0.06, decay: 0.12, filter: 1200 });
+          break;
+      }
+    }
+
+    /* Nouveau module ou défi débloqué */
+    unlockJingle() {
+      if (!this.ok('unlockJ', 1, 1.2)) return;
+      const t = this.ctx.currentTime, out = this.out(null);
+      [523, 784, 1047, 1568].forEach((f, i) => this.tone(out, t + i * 0.09, { wave: 'triangle', freq: f, peak: 0.12, decay: 0.3 }));
     }
 
     /* Petit clic d'interface */

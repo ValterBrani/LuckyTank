@@ -21,12 +21,51 @@ HB.STATS = [
 HB.levelStepCost = l => (l <= 4 ? 1 : l <= 7 ? 2 : 3);
 HB.levelTotalCost = L => { let c = 0; for (let l = 2; l <= L; l++) c += HB.levelStepCost(l); return c; };
 HB.buildCost = stats => HB.STATS.reduce((s, st) => s + HB.levelTotalCost(stats[st.key]), 0);
-HB.pointsLeft = stats => HB.BUDGET - HB.buildCost(stats);
-HB.canSetLevel = (stats, key, level) => {
-  if (level < 1 || level > HB.MAX_LEVEL) return false;
-  const s = Object.assign({}, stats, { [key]: level });
-  return HB.buildCost(s) <= HB.BUDGET;
+
+/* Coût total d'un tank = stats + modules. `t` = { stats, modules } */
+HB.modulesCost = mods => (mods || []).reduce((s, m) => s + (HB.MODULES[m.id] ? HB.MODULES[m.id].cost : 0), 0);
+HB.tankCost = t => HB.buildCost(t.stats) + HB.modulesCost(t.modules);
+HB.pointsLeft = (t, budget = HB.BUDGET) => budget - HB.tankCost(t);
+HB.canSetLevel = (t, key, level, budget = HB.BUDGET, cap = HB.MAX_LEVEL) => {
+  if (level < 1 || level > Math.min(HB.MAX_LEVEL, cap)) return false;
+  const stats = Object.assign({}, t.stats, { [key]: level });
+  return HB.buildCost(stats) + HB.modulesCost(t.modules) <= budget;
 };
+
+/* =========================================================================
+ * Modules : compétences actives. Elles coûtent des points du budget et le
+ * pilote les déclenche seul, quand la condition choisie est remplie.
+ * ========================================================================= */
+HB.MAX_MODULES = 2;
+HB.MODULES = {
+  nitro:      { label: 'Nitro',            icon: '🚀', cost: 3, cooldown: 9,  duration: 2, trigger: 'incoming',
+                desc: 'Speed ×1.9 for 2 s. Great for dodging or ramming.' },
+  bouclier:   { label: 'Shield',           icon: '💠', cost: 4, cooldown: 13, duration: 3, trigger: 'incoming',
+                desc: 'Blocks 65% of incoming damage for 3 s.' },
+  mines:      { label: 'Mines',            icon: '💣', cost: 3, cooldown: 6, trigger: 'enemyClose',
+                desc: 'Drops a mine behind the tank (45 damage). Up to 3 on the map.' },
+  fumee:      { label: 'Smoke screen',     icon: '💨', cost: 2, cooldown: 12, duration: 5, trigger: 'targeted2',
+                desc: 'A smoke cloud that blocks line of sight for 5 s.' },
+  reparation: { label: 'Emergency repair', icon: '🔧', cost: 5, uses: 1, trigger: 'hp25',
+                desc: 'Restores 45% of max HP. Once per battle.' },
+  explosif:   { label: 'Explosive shell',  icon: '🎆', cost: 3, cooldown: 6, trigger: 'inSight',
+                desc: 'The next shell explodes on impact and hurts everything around it.' },
+};
+HB.MODULE_ORDER = ['nitro', 'bouclier', 'mines', 'fumee', 'reparation', 'explosif'];
+
+/* Conditions de déclenchement (le "programme" du pilote) */
+HB.TRIGGERS = {
+  ready:      { label: 'As soon as ready' },
+  incoming:   { label: 'A shell is incoming' },
+  hp50:       { label: 'HP below 50%' },
+  hp25:       { label: 'HP below 25%' },
+  enemyClose: { label: 'An enemy is close' },
+  targeted2:  { label: '2+ enemies aim at me' },
+  retreating: { label: 'While retreating' },
+  chasing:    { label: 'While chasing' },
+  inSight:    { label: 'Target in sight' },
+};
+HB.TRIGGER_ORDER = ['ready', 'incoming', 'hp50', 'hp25', 'enemyClose', 'targeted2', 'retreating', 'chasing', 'inSight'];
 
 /* Stats dérivées : c'est ici que se jouent les compromis.
  *  - poids = blindage + puissance → réduit la vitesse et la maniabilité
@@ -88,16 +127,17 @@ HB.NAMES = ['Bulldozer', 'Vortex', 'Mole', 'Mammoth', 'Hornet', 'Gargoyle', 'Thu
 HB.MAX_TANKS = 8;
 HB.MIN_TANKS = 2;
 
-/* Répartition aléatoire du budget : poids aléatoires au carré → favorise les spécialistes */
-HB.randomStats = (rng = Math.random) => {
+/* Répartition aléatoire du budget : poids aléatoires au carré → favorise les spécialistes.
+ * caps = niveau max par stat (contraintes des défis) */
+HB.randomStats = (rng = Math.random, budget = HB.BUDGET, caps = {}) => {
   const s = {};
   HB.STATS.forEach(st => (s[st.key] = 1));
   const w = {};
   HB.STATS.forEach(st => (w[st.key] = 0.12 + rng() ** 2));
   for (let guard = 0; guard < 200; guard++) {
     const used = HB.buildCost(s);
-    const affordable = HB.STATS.filter(st => s[st.key] < HB.MAX_LEVEL &&
-      used + HB.levelStepCost(s[st.key] + 1) <= HB.BUDGET);
+    const affordable = HB.STATS.filter(st => s[st.key] < Math.min(HB.MAX_LEVEL, caps[st.key] || HB.MAX_LEVEL) &&
+      used + HB.levelStepCost(s[st.key] + 1) <= budget);
     if (!affordable.length) break;
     let tot = 0;
     affordable.forEach(st => (tot += w[st.key]));
@@ -113,17 +153,34 @@ HB.randomBehavior = (rng = Math.random) => {
   return keys[Math.floor(rng() * keys.length)];
 };
 
-HB.randomTank = (roster = []) => {
+/* Modules au hasard parmi ceux disponibles, avec leur condition par défaut */
+HB.randomModules = (available, rng = Math.random) => {
+  const pool = available.slice();
+  const n = pool.length ? (rng() < 0.35 ? 0 : rng() < 0.7 ? 1 : 2) : 0;
+  const out = [];
+  for (let i = 0; i < n && pool.length; i++) {
+    const id = pool.splice(Math.floor(rng() * pool.length), 1)[0];
+    const trig = rng() < 0.75 ? HB.MODULES[id].trigger : HB.TRIGGER_ORDER[Math.floor(rng() * HB.TRIGGER_ORDER.length)];
+    out.push({ id, trigger: trig });
+  }
+  return out;
+};
+
+/* opts.modules : liste des modules autorisés (par défaut : ceux débloqués) */
+HB.randomTank = (roster = [], opts = {}) => {
   const usedNames = new Set(roster.map(t => t.name));
   const usedColors = new Set(roster.map(t => t.color));
   const names = HB.NAMES.filter(n => !usedNames.has(n));
   const colors = HB.COLORS.filter(c => !usedColors.has(c));
   const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+  const available = opts.modules || (HB.unlockedModules ? [...HB.unlockedModules()] : []);
+  const modules = HB.randomModules(available);
   return {
     id: HB.uid(),
     name: names.length ? pick(names) : 'Tank ' + (roster.length + 1),
     color: colors.length ? colors[0] : pick(HB.COLORS),
-    stats: HB.randomStats(),
+    stats: HB.randomStats(Math.random, HB.BUDGET - HB.modulesCost(modules)),
+    modules,
     behavior: HB.randomBehavior(),
     retreat: pick(HB.RETREAT).value,
     random: true,
@@ -131,6 +188,9 @@ HB.randomTank = (roster = []) => {
 };
 
 HB.uid = () => Math.random().toString(36).slice(2, 10);
+
+/* Deux tanks sont ennemis s'ils ne sont pas dans la même équipe (pas d'équipe = chacun pour soi) */
+HB.isEnemy = (a, b) => a !== b && (!a.team || !b.team || a.team !== b.team);
 
 /* Petits utilitaires mathématiques */
 HB.clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
