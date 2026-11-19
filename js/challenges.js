@@ -163,8 +163,8 @@
   } catch (e) { /* ignore */ }
   const saveProg = () => { try { localStorage.setItem(PROGRESS, JSON.stringify(prog)); } catch (e) { /* ignore */ } };
 
-  // Pour tester : ouvrir index.html?unlockall débloque tous les défis et modules
-  const UNLOCK_ALL = /[?&]unlockall\b/.test(location.search);
+  // Pour tester : ouvrir index.html?unlockall (ou index.html#unlockall) débloque tous les défis et modules
+  const UNLOCK_ALL = /[?&]unlockall\b/.test(location.search) || location.hash === '#unlockall';
 
   HB.progress = {
     flags: cid => prog.done[cid] || [false, false, false],

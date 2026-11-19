@@ -59,7 +59,7 @@ Nitro is available from the start; the others are unlocked through the challenge
 
 Enemies team up against you, except in the free-for-all challenges.
 
-To test everything without playing the campaign: open `index.html?unlockall`.
+To test everything without playing the campaign: open `index.html?unlockall` (or `index.html#unlockall`).
 
 ## The pilots
 
