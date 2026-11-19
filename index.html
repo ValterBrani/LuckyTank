@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hasard Battle — tanks autonomes</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ===================== GARAGE ===================== -->
+  <section id="garage" class="screen active">
+    <header class="topbar">
+      <h1>HASARD<span>BATTLE</span></h1>
+      <p class="tag">Configure ton tank avant la bataille. Ensuite, il se débrouille tout seul.</p>
+      <div class="sound"><button class="mute-btn" title="Couper / remettre le son (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
+    </header>
+
+    <div class="garage-grid">
+      <aside class="panel roster-panel">
+        <h2>Tanks engagés <span id="rosterCount" class="muted"></span></h2>
+        <div id="roster"></div>
+        <div class="roster-actions">
+          <button id="addCustom" class="btn">+ Tank perso</button>
+          <button id="addRandom" class="btn">🎲 Tank aléatoire</button>
+        </div>
+        <p class="hint">Chaque joueur peut configurer son propre tank. Les tanks marqués 🎲 ont été montés au hasard.</p>
+      </aside>
+
+      <main class="panel editor-panel">
+        <div class="editor-head">
+          <canvas id="preview" width="260" height="170"></canvas>
+          <div class="identity">
+            <label class="field">Nom du tank
+              <input id="tankName" maxlength="14" autocomplete="off" spellcheck="false">
+            </label>
+            <div id="swatches" class="swatches"></div>
+            <div class="budget">
+              <div class="budget-num"><span id="pointsLeft">0</span><small>/ <span id="budgetMax"></span> points restants</small></div>
+              <div class="budget-bar"><i id="budgetFill"></i></div>
+            </div>
+            <div class="row-btns">
+              <button id="randomize" class="btn small">🎲 Répartir au hasard</button>
+              <button id="resetStats" class="btn small ghost">↺ Tout à 1</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="cost-legend">
+          Coût par niveau :
+          <span class="tier t1">niv. 2-4 = 1 pt</span>
+          <span class="tier t2">niv. 5-7 = 2 pts</span>
+          <span class="tier t3">niv. 8-10 = 3 pts</span>
+        </div>
+        <div id="statRows" class="stats"></div>
+
+        <h3>Pilote automatique</h3>
+        <div id="behaviors" class="behaviors"></div>
+        <div class="retreat">
+          <span>Se replier pour se réparer :</span>
+          <div id="retreatBtns" class="seg"></div>
+        </div>
+      </main>
+
+      <aside class="panel derived-panel">
+        <h2>Fiche technique</h2>
+        <div id="archetype" class="archetype"></div>
+        <div id="derived"></div>
+        <ul id="notes" class="notes"></ul>
+
+        <h2>Champ de bataille</h2>
+        <div class="opt col">
+          <span>Obstacles</span>
+          <div id="densityBtns" class="seg"></div>
+        </div>
+        <label class="opt toggle"><span>Kits de réparation</span><input type="checkbox" id="optPickups"><i></i></label>
+        <label class="opt toggle"><span>Zone mortelle (après 60 s)</span><input type="checkbox" id="optZone"><i></i></label>
+        <p class="hint">La carte est générée au hasard à chaque bataille.</p>
+        <button id="launch" class="btn launch">LANCER LA BATAILLE ▶</button>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== BATAILLE ===================== -->
+  <section id="battle" class="screen">
+    <div class="battle-top">
+      <button id="backGarage" class="btn small ghost">◀ Garage</button>
+      <div class="speed" id="speedBtns">
+        <button data-speed="0" title="Pause (Espace)">⏸</button>
+        <button data-speed="1" title="Vitesse normale (1)">×1</button>
+        <button data-speed="2" title="Vitesse ×2 (2)">×2</button>
+        <button data-speed="4" title="Vitesse ×4 (3)">×4</button>
+      </div>
+      <div id="clock" class="clock">0:00</div>
+      <div id="zoneInfo" class="zone-info"></div>
+      <div class="sound"><button class="mute-btn" title="Couper / remettre le son (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
+    </div>
+    <div class="battle-grid">
+      <div class="canvas-wrap"><canvas id="battleCanvas" width="1280" height="800"></canvas></div>
+      <aside class="battle-side">
+        <div id="scoreboard"></div>
+        <h3>Journal</h3>
+        <div id="feed"></div>
+        <p class="hint">Clique sur un tank pour voir sa portée, sa cible, son chemin et ce qu'il est en train de faire.</p>
+      </aside>
+    </div>
+
+    <div id="results" class="overlay hidden">
+      <div class="results-box">
+        <h2 id="resTitle"></h2>
+        <p id="resSub" class="muted"></p>
+        <table class="res-table">
+          <thead><tr><th>#</th><th>Tank</th><th>Pilote</th><th>Élim.</th><th>Dégâts</th><th>Précision</th><th>Survie</th><th>Détruit par</th></tr></thead>
+          <tbody id="resBody"></tbody>
+        </table>
+        <div class="res-btns">
+          <button id="resReplay" class="btn">↻ Revanche (même carte)</button>
+          <button id="resNew" class="btn">🎲 Nouvelle carte</button>
+          <button id="resGarage" class="btn ghost">◀ Retour au garage</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/map.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/tank.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
