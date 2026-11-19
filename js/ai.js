@@ -30,7 +30,7 @@
       this.fleeT = 0;
       this.wobble = 0;
       this.wobbleT = 0;
-      this.state = 'Démarrage';
+      this.state = 'Starting';
       this.wantMove = false;
     }
 
@@ -39,7 +39,7 @@
       const enemies = game.tanks.filter(o => o.alive && o !== t);
       if (!enemies.length) {
         c.move = 0; c.turn = 0; c.fire = false;
-        this.state = 'Victoire !';
+        this.state = 'Victory!';
         return;
       }
 
@@ -66,18 +66,18 @@
       const threatened = nearest && dist(t.x, t.y, nearest.x, nearest.y) < nearest.d.range + 80;
 
       if (zone.active && !inZone(t.x, t.y, 30)) {
-        goal = zone.safe; this.state = 'Fuit la zone';
+        goal = zone.safe; this.state = 'Escaping the zone';
       } else if (hpR < retreat && pickup) {
-        goal = pickup; this.state = 'Va se réparer';
+        goal = pickup; this.state = 'Going to repair';
       } else if (hpR < retreat && threatened) {
-        goal = this.fleePoint(enemies, game, dt); this.state = 'Repli';
+        goal = this.fleePoint(enemies, game, dt); this.state = 'Retreating';
       } else if (this.behKey === 'opportuniste' && pickup && hpR < 0.85 &&
                  dist(t.x, t.y, pickup.x, pickup.y) < dT) {
-        goal = pickup; this.state = 'Ramasse un kit';
+        goal = pickup; this.state = 'Grabbing a kit';
       } else {
         const desired = this.beh.distFactor * range;
         if (!shotOnTarget || dT > range * 0.95) {
-          goal = tg; this.state = 'Poursuite';
+          goal = tg; this.state = 'Chasing';
         } else {
           const toX = (tg.x - t.x) / dT, toY = (tg.y - t.y) / dT;
           const tanX = -toY * this.strafeDir, tanY = toX * this.strafeDir;
@@ -86,21 +86,21 @@
               if (dT > desired) {
                 // Charge en zigzag pour être plus dur à toucher
                 const zig = Math.sin(game.time * 3.2 + t.index) * 0.7;
-                dir = { x: toX + tanX * zig, y: toY + tanY * zig }; this.state = 'Charge';
+                dir = { x: toX + tanX * zig, y: toY + tanY * zig }; this.state = 'Charging';
               } else if (t.hpRatio >= tg.hpRatio * 0.9 || t.d.weight > tg.d.weight * 1.3) {
-                dir = { x: toX, y: toY }; this.state = 'Éperonne !';   // a l'avantage : il fonce dedans
-              } else { dir = { x: tanX * 0.8 + toX * 0.15, y: tanY * 0.8 + toY * 0.15 }; speedScale = 0.75; allowReverse = true; this.state = 'Pilonnage'; }
+                dir = { x: toX, y: toY }; this.state = 'Ramming!';   // a l'avantage : il fonce dedans
+              } else { dir = { x: tanX * 0.8 + toX * 0.15, y: tanY * 0.8 + toY * 0.15 }; speedScale = 0.75; allowReverse = true; this.state = 'Pounding'; }
               break;
             case 'tireur':
-              if (dT < desired * 0.75) { dir = { x: -toX + tanX * 0.3, y: -toY + tanY * 0.3 }; allowReverse = true; this.state = 'Recule'; }
-              else if (dT > range * 0.92) { dir = { x: toX, y: toY }; speedScale = 0.5; this.state = 'Ajuste'; }
-              else { dir = null; this.state = 'En position'; }
+              if (dT < desired * 0.75) { dir = { x: -toX + tanX * 0.3, y: -toY + tanY * 0.3 }; allowReverse = true; this.state = 'Backing off'; }
+              else if (dT > range * 0.92) { dir = { x: toX, y: toY }; speedScale = 0.5; this.state = 'Adjusting'; }
+              else { dir = null; this.state = 'In position'; }
               break;
             default: { // flanqueur & opportuniste : orbite autour de la cible
               const radial = clamp((dT - desired) / desired, -1, 1) * 1.4;
               dir = { x: tanX + toX * radial, y: tanY + toY * radial };
               allowReverse = true;
-              this.state = this.behKey === 'opportuniste' ? 'Harcèle' : 'Encercle';
+              this.state = this.behKey === 'opportuniste' ? 'Harassing' : 'Circling';
             }
           }
         }
@@ -125,14 +125,14 @@
         let vx = dodge.x * 1.6, vy = dodge.y * 1.6;
         if (dirAngle !== null) { vx += Math.cos(dirAngle); vy += Math.sin(dirAngle); }
         const a = this.avoid(Math.atan2(vy, vx), map);
-        if (a !== null) { dirAngle = a; allowReverse = true; speedScale = 1; this.state = 'Esquive'; }
+        if (a !== null) { dirAngle = a; allowReverse = true; speedScale = 1; this.state = 'Dodging'; }
       }
 
       // ---------- 5. Pilotage ----------
       if (this.unstuckT > 0) {
         this.unstuckT -= dt;
         c.move = -0.8; c.turn = this.unstuckTurn;
-        this.state = 'Se dégage';
+        this.state = 'Getting unstuck';
       } else if (dirAngle !== null) {
         this.steer(dirAngle, allowReverse, speedScale);
       } else {

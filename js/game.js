@@ -83,7 +83,7 @@
 
       // Zone mortelle qui rétrécit
       if (this.options.zone && this.time > z.start) {
-        if (!z.active) { z.active = true; this.feed('☢️ La zone mortelle se referme !', 'warn'); HB.sfx.alarm(); }
+        if (!z.active) { z.active = true; this.feed('☢️ The death zone is closing in!', 'warn'); HB.sfx.alarm(); }
         const k = clamp((this.time - z.start) / z.dur, 0, 1);
         const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
         z.r = lerp(z.maxR, z.minR, e);
@@ -180,7 +180,7 @@
         this.winner = left[0] || this.tanks.find(t => t.place === 1) || null;
         if (left[0]) left[0].place = 1;
         if (this.winner) {
-          this.feed(`🏆 <b style="color:${this.winner.color}">${esc(this.winner.name)}</b> remporte la bataille !`, 'win');
+          this.feed(`🏆 <b style="color:${this.winner.color}">${esc(this.winner.name)}</b> wins the battle!`, 'win');
           setTimeout(() => { if (!this.destroyed) HB.sfx.victory(); }, 500);
         }
       }
@@ -338,9 +338,9 @@
       this.shake = 10;
       const vn = `<b style="color:${victim.color}">${esc(victim.name)}</b>`;
       if (attacker && attacker !== victim) {
-        this.feed(`💀 <b style="color:${attacker.color}">${esc(attacker.name)}</b> a détruit ${vn}`);
+        this.feed(`💀 <b style="color:${attacker.color}">${esc(attacker.name)}</b> destroyed ${vn}`);
       } else {
-        this.feed(`☢️ ${vn} a été dévoré par la zone`);
+        this.feed(`☢️ ${vn} was swallowed by the zone`);
       }
     }
 
@@ -354,7 +354,7 @@
         damageDealt: Math.round(t.damageDealt), damageTaken: Math.round(t.damageTaken),
         shots: t.shots, hits: t.hits, accuracy: t.shots ? Math.round(100 * t.hits / t.shots) : 0,
         survival: t.deathTime == null ? this.time : t.deathTime, behavior: t.cfg.behavior,
-        stats: t.stats, killer: t.killer ? t.killer.name : (t.alive ? null : 'la zone'), id: t.cfg.id,
+        stats: t.stats, killer: t.killer ? t.killer.name : (t.alive ? null : 'the zone'), id: t.cfg.id,
       }));
       return { list, duration: this.time, winner: this.winner ? this.winner.name : null, seed: this.options.seed };
     }

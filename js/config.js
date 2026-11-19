@@ -1,6 +1,6 @@
 'use strict';
 /* =========================================================================
- * Hasard Battle — règles, budget et équilibrage
+ * LuckyTank — règles, budget et équilibrage
  * Tout ce qui touche à l'équilibrage du jeu est regroupé ici.
  * ========================================================================= */
 const HB = window.HB = window.HB || {};
@@ -9,11 +9,11 @@ HB.BUDGET = 30;        // points à répartir par tank
 HB.MAX_LEVEL = 10;     // niveau max d'une stat (min = 1, gratuit)
 
 HB.STATS = [
-  { key: 'vitesse',   label: 'Vitesse',   icon: '⚡', desc: 'Vitesse de déplacement et de rotation du châssis. Plus le tank est lourd, moins elle sert.' },
-  { key: 'blindage',  label: 'Blindage',  icon: '🛡️', desc: 'Points de vie. Le blindage pèse lourd : il ralentit le tank.' },
-  { key: 'puissance', label: 'Puissance', icon: '💥', desc: 'Dégâts par obus. Un gros canon pèse lourd, recharge plus lentement, tourne moins vite et ses obus sont plus lents.' },
-  { key: 'cadence',   label: 'Cadence',   icon: '🔁', desc: 'Vitesse de rechargement du canon (freinée par la puissance).' },
-  { key: 'portee',    label: 'Portée',    icon: '🎯', desc: 'Distance de tir et précision.' },
+  { key: 'vitesse',   label: 'Speed',     icon: '⚡', desc: 'Movement and hull turning speed. The heavier the tank, the less it helps.' },
+  { key: 'blindage',  label: 'Armor',     icon: '🛡️', desc: 'Hit points. Armor is heavy: it slows the tank down.' },
+  { key: 'puissance', label: 'Firepower', icon: '💥', desc: 'Damage per shell. A big gun is heavy, reloads slower, turns slower and fires slower shells.' },
+  { key: 'cadence',   label: 'Fire rate', icon: '🔁', desc: 'How fast the gun reloads (slowed down by firepower).' },
+  { key: 'portee',    label: 'Range',     icon: '🎯', desc: 'Firing distance and accuracy.' },
 ];
 
 /* Coût croissant : les premiers niveaux sont bon marché, les derniers très chers.
@@ -53,37 +53,37 @@ HB.derive = stats => {
 
 /* Bornes pour afficher les jauges dans le garage */
 HB.DERIVED_VIEW = [
-  { key: 'maxHp',    label: 'Points de vie',  min: 92,  max: 245, fmt: d => Math.round(d.maxHp) },
-  { key: 'speed',    label: 'Vitesse réelle', min: 30,  max: 172, fmt: d => Math.round(d.speed * 0.4) + ' km/h' },
-  { key: 'damage',   label: 'Dégâts / obus',  min: 13,  max: 58,  fmt: d => Math.round(d.damage) },
-  { key: 'fireRate', label: 'Cadence de tir', min: 0.3, max: 1.4, fmt: d => d.fireRate.toFixed(2) + ' tir/s' },
-  { key: 'dps',      label: 'Dégâts / sec',   min: 5,   max: 50,  fmt: d => d.dps.toFixed(1) },
-  { key: 'range',    label: 'Portée',         min: 218, max: 650, fmt: d => Math.round(d.range) + ' m' },
-  { key: 'tons',     label: 'Poids',          min: 24,  max: 70,  fmt: d => d.tons + ' t', invert: true },
+  { key: 'maxHp',    label: 'Hit points',  min: 92,  max: 245, fmt: d => Math.round(d.maxHp) },
+  { key: 'speed',    label: 'Actual speed', min: 30,  max: 172, fmt: d => Math.round(d.speed * 0.4) + ' km/h' },
+  { key: 'damage',   label: 'Damage / shell',  min: 13,  max: 58,  fmt: d => Math.round(d.damage) },
+  { key: 'fireRate', label: 'Fire rate',      min: 0.3, max: 1.4, fmt: d => d.fireRate.toFixed(2) + ' shots/s' },
+  { key: 'dps',      label: 'Damage / sec',   min: 5,   max: 50,  fmt: d => d.dps.toFixed(1) },
+  { key: 'range',    label: 'Range',         min: 218, max: 650, fmt: d => Math.round(d.range) + ' m' },
+  { key: 'tons',     label: 'Weight',          min: 24,  max: 70,  fmt: d => d.tons + ' t', invert: true },
 ];
 
 /* Comportements IA (gratuits : c'est la "personnalité" du pilote) */
 HB.BEHAVIORS = {
-  agressif:     { label: 'Bourrin',    icon: '🐗', distFactor: 0.40, target: 'nearest',
-                  desc: "Fonce sur l'ennemi le plus proche, l'éperonne s'il a l'avantage et tire à travers les caisses." },
+  agressif:     { label: 'Bruiser',    icon: '🐗', distFactor: 0.40, target: 'nearest',
+                  desc: 'Charges the nearest enemy, rams it when it has the upper hand and shoots through crates.' },
   tireur:       { label: 'Sniper',     icon: '🔭', distFactor: 0.88, target: 'nearest',
-                  desc: "Reste au bout de sa portée et recule quand on l'approche." },
-  flanqueur:    { label: 'Chasseur',   icon: '🌀', distFactor: 0.62, target: 'nearest',
-                  desc: 'Tourne autour de sa cible en esquivant ses tirs.' },
-  opportuniste: { label: 'Charognard', icon: '🦅', distFactor: 0.70, target: 'weakest',
-                  desc: 'Achève les tanks les plus abîmés et ramasse les kits de réparation.' },
+                  desc: 'Stays at the edge of its range and backs off when someone gets close.' },
+  flanqueur:    { label: 'Flanker',    icon: '🌀', distFactor: 0.62, target: 'nearest',
+                  desc: 'Circles around its target while dodging its shots.' },
+  opportuniste: { label: 'Scavenger',  icon: '🦅', distFactor: 0.70, target: 'weakest',
+                  desc: 'Finishes off the most damaged tanks and grabs repair kits.' },
 };
 
 HB.RETREAT = [
-  { value: 0,    label: 'Jamais' },
-  { value: 0.25, label: 'Sous 25 % PV' },
-  { value: 0.5,  label: 'Sous 50 % PV' },
+  { value: 0,    label: 'Never' },
+  { value: 0.25, label: 'Below 25% HP' },
+  { value: 0.5,  label: 'Below 50% HP' },
 ];
 
 HB.COLORS = ['#e8543f', '#3f8ee8', '#f2c230', '#4fc26b', '#b45ee8', '#f08a2c', '#35c9c1', '#e85ca8', '#cfd6dd', '#8a6d4b'];
-HB.NAMES = ['Bulldozer', 'Vortex', 'Taupe', 'Mammouth', 'Frelon', 'Gargouille', 'Tonnerre', 'Renard',
-            'Belette', 'Cyclone', 'Pétard', 'Grizzli', 'Mistral', 'Cafard', 'Bélier', 'Furet', 'Sanglier',
-            'Pélican', 'Bourdon', 'Caïman', 'Zéphyr', 'Marmotte', 'Tornade', 'Scorpion'];
+HB.NAMES = ['Bulldozer', 'Vortex', 'Mole', 'Mammoth', 'Hornet', 'Gargoyle', 'Thunder', 'Fox',
+            'Weasel', 'Cyclone', 'Firecracker', 'Grizzly', 'Mistral', 'Cockroach', 'Ram', 'Ferret', 'Boar',
+            'Pelican', 'Bumblebee', 'Caiman', 'Zephyr', 'Marmot', 'Tornado', 'Scorpion'];
 
 HB.MAX_TANKS = 8;
 HB.MIN_TANKS = 2;

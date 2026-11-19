@@ -127,7 +127,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tier.t3 { background: rgba(232,96,58,.15); color: var(--t3); }
 
 .stat-row {
-  display: grid; grid-template-columns: minmax(150px, 1.2fr) 28px auto 28px 26px 52px; gap: 8px; align-items: center;
+  display: grid; grid-template-columns: minmax(150px, 1.2fr) 28px auto 28px 26px 74px; gap: 8px; align-items: center;
   padding: 7px 0; border-bottom: 1px solid #2b313b;
 }
 .stat-row:last-child { border-bottom: none; }

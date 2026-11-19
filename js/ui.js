@@ -34,13 +34,26 @@
     try { localStorage.setItem(STORE, JSON.stringify({ roster: state.roster, options: state.options })); } catch (e) { /* ignore */ }
   }
 
+  /* Anciens noms français (versions précédentes) → noms anglais */
+  const OLD_NAMES = ['Bulldozer', 'Vortex', 'Taupe', 'Mammouth', 'Frelon', 'Gargouille', 'Tonnerre', 'Renard',
+    'Belette', 'Cyclone', 'Pétard', 'Grizzli', 'Mistral', 'Cafard', 'Bélier', 'Furet', 'Sanglier',
+    'Pélican', 'Bourdon', 'Caïman', 'Zéphyr', 'Marmotte', 'Tornade', 'Scorpion'];
+  function migrateName(n) {
+    if (n === 'Mon Tank') return 'My Tank';
+    if (n === 'Sans nom') return 'Unnamed';
+    const m = /^Joueur (\d+)$/.exec(n);
+    if (m) return 'Player ' + m[1];
+    const i = OLD_NAMES.indexOf(n);
+    return i >= 0 ? HB.NAMES[i] : n;
+  }
+
   function sanitize(t) {
     if (!t || typeof t !== 'object') return null;
     const stats = {};
     for (const st of HB.STATS) stats[st.key] = HB.clamp(Math.round(+((t.stats || {})[st.key]) || 1), 1, HB.MAX_LEVEL);
     return {
       id: t.id || HB.uid(),
-      name: String(t.name || 'Tank').slice(0, 14),
+      name: migrateName(String(t.name || 'Tank')).slice(0, 14),
       color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : HB.COLORS[0],
       stats: HB.buildCost(stats) <= HB.BUDGET ? stats : HB.randomStats(),
       behavior: HB.BEHAVIORS[t.behavior] ? t.behavior : 'flanqueur',
@@ -51,7 +64,7 @@
 
   function defaultRoster() {
     state.roster = [{
-      id: HB.uid(), name: 'Mon Tank', color: HB.COLORS[0],
+      id: HB.uid(), name: 'My Tank', color: HB.COLORS[0],
       stats: { vitesse: 5, blindage: 5, puissance: 5, cadence: 5, portee: 5 },
       behavior: 'flanqueur', retreat: 0.25, random: false,
     }];
@@ -63,29 +76,29 @@
 
   /* ---------------- Archétype & conseils ---------------- */
   HB.archetype = s => {
-    if (s.blindage >= 7 && s.puissance >= 6) return { label: 'Forteresse', icon: '🏰', sub: 'Lent mais terrifiant.' };
-    if (s.vitesse >= 7 && s.blindage <= 3) return { label: 'Éclaireur', icon: '🏎️', sub: "Rapide, fragile, insaisissable." };
-    if (s.puissance >= 8) return { label: 'Canon lourd', icon: '💣', sub: 'Chaque obus fait mal… quand il touche.' };
-    if (s.cadence >= 7) return { label: 'Mitrailleur', icon: '🔥', sub: 'Un déluge de petits obus.' };
-    if (s.portee >= 7) return { label: 'Artilleur', icon: '🎯', sub: 'Frappe de loin.' };
-    if (s.blindage >= 7) return { label: 'Char lourd', icon: '🛡️', sub: 'Encaisse tout.' };
-    if (s.vitesse >= 7) return { label: 'Coureur', icon: '💨', sub: 'Mobile et esquiveur.' };
-    return { label: 'Polyvalent', icon: '⚙️', sub: 'Bon partout, excellent nulle part.' };
+    if (s.blindage >= 7 && s.puissance >= 6) return { label: 'Fortress', icon: '🏰', sub: 'Slow but terrifying.' };
+    if (s.vitesse >= 7 && s.blindage <= 3) return { label: 'Scout', icon: '🏎️', sub: 'Fast, fragile, hard to pin down.' };
+    if (s.puissance >= 8) return { label: 'Heavy gun', icon: '💣', sub: 'Every shell hurts… when it hits.' };
+    if (s.cadence >= 7) return { label: 'Machine gunner', icon: '🔥', sub: 'A hail of small shells.' };
+    if (s.portee >= 7) return { label: 'Artillery', icon: '🎯', sub: 'Hits from afar.' };
+    if (s.blindage >= 7) return { label: 'Heavy tank', icon: '🛡️', sub: 'Takes a beating.' };
+    if (s.vitesse >= 7) return { label: 'Runner', icon: '💨', sub: 'Mobile and evasive.' };
+    return { label: 'All-rounder', icon: '⚙️', sub: 'Good at everything, great at nothing.' };
   };
 
   function notesFor(t) {
     const d = HB.derive(t.stats), out = [];
     const left = HB.pointsLeft(t.stats);
-    if (left > 0) out.push(['info', `Il te reste ${left} point${left > 1 ? 's' : ''} à dépenser.`]);
+    if (left > 0) out.push(['info', `You still have ${left} point${left > 1 ? 's' : ''} to spend.`]);
     const loss = Math.round((1 - d.weightFactor) * 100);
-    if (d.weightFactor < 0.7) out.push(['warn', `Très lourd (${d.tons} t) : il perd ${loss} % de sa vitesse.`]);
-    else if (d.weightFactor > 0.86) out.push(['good', `Léger (${d.tons} t) : presque aucune perte de vitesse.`]);
-    if (d.reload > 2.2) out.push(['warn', `Rechargement très lent : ${d.reload.toFixed(1)} s entre deux tirs.`]);
-    if (d.maxHp < 120) out.push(['warn', `Fragile : ${Math.ceil(d.maxHp / 58)} obus lourds suffisent à le détruire.`]);
-    if (d.range < 330) out.push(['warn', "Courte portée : il devra s'approcher pour tirer."]);
-    if (d.shellSpeed < 420) out.push(['info', 'Obus lents : les tanks rapides pourront les esquiver.']);
-    if (t.behavior === 'tireur' && d.range < 400) out.push(['warn', 'Un Sniper avec peu de portée, ce n\'est pas idéal.']);
-    if (t.behavior === 'agressif' && d.maxHp < 140) out.push(['warn', 'Un Bourrin fragile risque de mourir en premier.']);
+    if (d.weightFactor < 0.7) out.push(['warn', `Very heavy (${d.tons} t): loses ${loss}% of its speed.`]);
+    else if (d.weightFactor > 0.86) out.push(['good', `Light (${d.tons} t): almost no speed loss.`]);
+    if (d.reload > 2.2) out.push(['warn', `Very slow reload: ${d.reload.toFixed(1)} s between shots.`]);
+    if (d.maxHp < 120) out.push(['warn', `Fragile: ${Math.ceil(d.maxHp / 58)} heavy shells are enough to destroy it.`]);
+    if (d.range < 330) out.push(['warn', 'Short range: it will have to get close to fire.']);
+    if (d.shellSpeed < 420) out.push(['info', 'Slow shells: fast tanks will be able to dodge them.']);
+    if (t.behavior === 'tireur' && d.range < 400) out.push(['warn', 'A Sniper with little range is not ideal.']);
+    if (t.behavior === 'agressif' && d.maxHp < 140) out.push(['warn', 'A fragile Bruiser is likely to die first.']);
     return out;
   }
 
@@ -111,8 +124,8 @@
           <div class="mini">${mini}</div>
         </div>
         <div class="acts">
-          <button data-act="reroll" title="Remonter au hasard">🎲</button>
-          <button data-act="remove" title="Retirer" ${state.roster.length <= HB.MIN_TANKS ? 'disabled' : ''}>✕</button>
+          <button data-act="reroll" title="Rebuild at random">🎲</button>
+          <button data-act="remove" title="Remove" ${state.roster.length <= HB.MIN_TANKS ? 'disabled' : ''}>✕</button>
         </div>
       </div>`;
     }).join('');
@@ -128,7 +141,7 @@
 
     const used = new Set(state.roster.filter(o => o !== t).map(o => o.color));
     $('#swatches').innerHTML = HB.COLORS.map(c =>
-      `<button data-color="${c}" class="${c === t.color ? 'on' : ''} ${used.has(c) ? 'used' : ''}" style="background:${c}" title="${used.has(c) ? 'Déjà prise' : 'Couleur'}"></button>`).join('');
+      `<button data-color="${c}" class="${c === t.color ? 'on' : ''} ${used.has(c) ? 'used' : ''}" style="background:${c}" title="${used.has(c) ? 'Already taken' : 'Color'}"></button>`).join('');
 
     const left = HB.pointsLeft(t.stats);
     const pl = $('#pointsLeft');
@@ -143,7 +156,7 @@
       for (let l = 1; l <= HB.MAX_LEVEL; l++) {
         const on = l <= lvl;
         const can = !on && HB.canSetLevel(t.stats, st.key, l);
-        pips.push(`<i data-lvl="${l}" class="${tierOf(l)} ${on ? 'on' : can ? 'can' : 'locked'}" title="Niveau ${l}"></i>`);
+        pips.push(`<i data-lvl="${l}" class="${tierOf(l)} ${on ? 'on' : can ? 'can' : 'locked'}" title="Level ${l}"></i>`);
       }
       const nextCost = lvl < HB.MAX_LEVEL ? HB.levelStepCost(lvl + 1) : 0;
       const canInc = lvl < HB.MAX_LEVEL && nextCost <= left;
@@ -153,7 +166,7 @@
         <div class="pips">${pips.join('')}</div>
         <button class="pm" data-act="inc" ${canInc ? '' : 'disabled'}>+</button>
         <div class="lvl">${lvl}</div>
-        <div class="next ${lvl < HB.MAX_LEVEL && !canInc ? 'no' : ''}">${lvl >= HB.MAX_LEVEL ? 'MAX' : '+1 niv = ' + nextCost + ' pt' + (nextCost > 1 ? 's' : '')}</div>
+        <div class="next ${lvl < HB.MAX_LEVEL && !canInc ? 'no' : ''}">${lvl >= HB.MAX_LEVEL ? 'MAX' : '+1 lvl = ' + nextCost + ' pt' + (nextCost > 1 ? 's' : '')}</div>
       </div>`;
     }).join('');
 
@@ -178,7 +191,7 @@
   }
 
   function renderOptions() {
-    const dens = [['faible', 'Clairsemée'], ['normale', 'Normale'], ['forte', 'Dense']];
+    const dens = [['faible', 'Sparse'], ['normale', 'Normal'], ['forte', 'Dense']];
     $('#densityBtns').innerHTML = dens.map(([k, l]) => `<button data-dens="${k}" class="${state.options.density === k ? 'on' : ''}">${l}</button>`).join('');
     $('#optPickups').checked = !!state.options.pickups;
     $('#optZone').checked = !!state.options.zone;
@@ -208,7 +221,7 @@
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(`${t.name} — ${HB.derive(t.stats).tons} tonnes`, cv.width / 2, cv.height - 7);
+      ctx.fillText(`${t.name} — ${HB.derive(t.stats).tons} tons`, cv.width / 2, cv.height - 7);
     }
     if ($('#garage').classList.contains('active')) previewRaf = requestAnimationFrame(previewLoop);
   }
@@ -242,7 +255,7 @@
     $('#addCustom').addEventListener('click', () => {
       if (state.roster.length >= HB.MAX_TANKS) return;
       const r = HB.randomTank(state.roster);
-      r.name = 'Joueur ' + (state.roster.length + 1);
+      r.name = 'Player ' + (state.roster.length + 1);
       r.stats = { vitesse: 1, blindage: 1, puissance: 1, cadence: 1, portee: 1 };
       r.behavior = 'flanqueur'; r.retreat = 0.25; r.random = false;
       state.roster.push(r);
@@ -260,7 +273,7 @@
     });
 
     $('#tankName').addEventListener('input', e => {
-      cur().name = e.target.value.slice(0, 14) || 'Sans nom';
+      cur().name = e.target.value.slice(0, 14) || 'Unnamed';
       renderRoster();
       save();
     });
@@ -348,7 +361,7 @@
     game.speed = state.speed || 1;
     buildScoreboard();
     setSpeedButtons();
-    addFeed(`⚔️ ${roster.length} tanks sur la carte n°${seed}. Que le meilleur gagne !`);
+    addFeed(`⚔️ ${roster.length} tanks on map #${seed}. May the best tank win!`);
     HB.sfx.unlock();
     HB.sfx.start();
     game.start();
@@ -372,6 +385,11 @@
     });
   }
 
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
   function fmtTime(s) { s = Math.max(0, Math.floor(s)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 
   function renderHud(g) {
@@ -383,14 +401,15 @@
       const ratio = t.hpRatio;
       r.hp.style.width = (ratio * 100) + '%';
       r.hp.style.background = ratio > 0.5 ? 'var(--good)' : ratio > 0.25 ? '#f2c230' : 'var(--bad)';
-      r.st.textContent = t.alive ? `${Math.ceil(t.hp)} PV · ${t.brain.state}` : `Détruit · ${t.place}e`;
+      r.st.textContent = t.alive ? `${Math.ceil(t.hp)} HP · ${t.brain.state}` : `Destroyed · ${ordinal(t.place)}`;
       r.k.innerHTML = `⚔ ${t.kills}<br><span class="muted">${Math.round(t.damageDealt)} dmg</span>`;
     }
     $('#clock').textContent = fmtTime(g.time);
     const zi = $('#zoneInfo');
-    if (!g.options.zone) { zi.textContent = ''; zi.classList.remove('hot'); }
-    else if (!g.zone.active) { zi.textContent = `☢️ Zone mortelle dans ${Math.ceil(g.zone.start - g.time)} s`; zi.classList.remove('hot'); }
-    else { zi.textContent = '☢️ La zone se referme !'; zi.classList.add('hot'); }
+    if (g.over) { zi.textContent = '🏁 Battle over'; zi.classList.remove('hot'); }
+    else if (!g.options.zone) { zi.textContent = ''; zi.classList.remove('hot'); }
+    else if (!g.zone.active) { zi.textContent = `☢️ Death zone in ${Math.ceil(g.zone.start - g.time)} s`; zi.classList.remove('hot'); }
+    else { zi.textContent = '☢️ The zone is closing in!'; zi.classList.add('hot'); }
   }
 
   function addFeed(html, kind) {
@@ -419,9 +438,9 @@
   function showResults(res) {
     const w = res.list[0];
     $('#resTitle').innerHTML = res.winner
-      ? `🏆 <span style="color:${w.color}">${esc(res.winner)}</span> remporte la bataille !`
-      : 'Match nul';
-    $('#resSub').textContent = `Durée : ${fmtTime(res.duration)} · carte n°${res.seed}`;
+      ? `🏆 <span style="color:${w.color}">${esc(res.winner)}</span> wins the battle!`
+      : 'Draw';
+    $('#resSub').textContent = `Duration: ${fmtTime(res.duration)} · map #${res.seed}`;
     $('#resBody').innerHTML = res.list.map((r, i) => {
       const b = HB.BEHAVIORS[r.behavior];
       return `<tr class="${i === 0 ? 'first' : ''}">
@@ -430,7 +449,7 @@
         <td>${b.icon} ${b.label}</td>
         <td>${r.kills}</td>
         <td>${r.damageDealt}</td>
-        <td>${r.accuracy} % <span class="muted">(${r.hits}/${r.shots})</span></td>
+        <td>${r.accuracy}% <span class="muted">(${r.hits}/${r.shots})</span></td>
         <td>${fmtTime(r.survival)}</td>
         <td>${r.killer ? esc(r.killer) : '—'}</td>
       </tr>`;

@@ -1,58 +1,61 @@
-# Hasard Battle
+# LuckyTank
 
-Bataille de tanks **autonomes** : on configure son tank avant la partie, puis il se bat tout seul sur une carte générée au hasard.
+A battle of **autonomous** tanks: you build your tank before the match, then it fights on its own on a randomly generated map.
 
-## Lancer le jeu
+▶ **Play online:** https://valterbrani.github.io/LuckyTank/ (once GitHub Pages is enabled)
 
-Double-clique sur `index.html` (Chrome, Edge ou Firefox). Aucune installation, aucun serveur.
+## Running the game
 
-## Le principe
+Double-click `index.html` (Chrome, Edge or Firefox). No install, no server, no build step.
 
-1. **Garage** : chaque tank dispose de **30 points** à répartir entre 5 stats (niveau 1 à 10).
-2. **Pilote automatique** : on choisit la personnalité du pilote (gratuit) et quand il doit se replier.
-3. **Bataille** : tous les tanks s'affrontent en chacun pour soi. Le dernier debout gagne.
+## How it works
 
-Jusqu'à 8 tanks : plusieurs joueurs peuvent configurer chacun le leur sur le même PC, ou ajouter des tanks montés au hasard.
+1. **Garage**: each tank gets **30 points** to spread across 5 stats (level 1 to 10).
+2. **Autopilot**: pick the pilot's personality (free) and when it should retreat to repair.
+3. **Battle**: every tank for itself. Last one standing wins.
 
-## Les compromis
+Up to 8 tanks: several players can each build their own tank on the same PC, or add randomly built tanks.
 
-| Mécanisme | Effet |
+## The trade-offs
+
+| Mechanic | Effect |
 |---|---|
-| **Coût croissant** | Niveaux 2-4 = 1 pt, 5-7 = 2 pts, 8-10 = 3 pts. Une stat au max coûte 18 pts sur 30. |
-| **Poids** | Blindage et Puissance alourdissent le tank : jusqu’à −40 % de vitesse et une rotation plus lente. |
-| **Gros canon** | La Puissance rallonge aussi le rechargement, ralentit la tourelle et les obus (plus faciles à esquiver). |
-| **Tir en mouvement** | Moins précis qu'à l'arrêt. |
-| **Éperonnage** | Un choc rapide fait des dégâts, d'autant plus que l'agresseur est lourd. |
+| **Rising cost** | Levels 2-4 = 1 pt, 5-7 = 2 pts, 8-10 = 3 pts. Maxing one stat costs 18 of your 30 points. |
+| **Weight** | Armor and Firepower make the tank heavier: up to −40% speed and slower turning. |
+| **Big gun** | Firepower also slows the reload, the turret and the shells (easier to dodge). |
+| **Firing on the move** | Less accurate than firing while standing still. |
+| **Ramming** | A fast collision deals damage, more so when the rammer is heavy. |
 
-Tu ne peux donc pas être à la fois rapide, blindé et lourdement armé.
+So you can't be fast, armored and heavily armed all at once.
 
-## Les pilotes
+## The pilots
 
-- 🐗 **Bourrin** : fonce, éperonne s'il a l'avantage, tire à travers les caisses. Bon en duel, risqué dans une grosse mêlée.
-- 🔭 **Sniper** : reste au bout de sa portée, recule si on l'approche.
-- 🌀 **Chasseur** : tourne autour de sa cible pour esquiver.
-- 🦅 **Charognard** : achève les tanks abîmés et ramasse les kits.
+- 🐗 **Bruiser**: charges, rams when it has the upper hand, shoots through crates. Strong in duels, risky in a big brawl.
+- 🔭 **Sniper**: stays at the edge of its range, backs off when someone gets close.
+- 🌀 **Flanker**: circles its target to dodge its shots.
+- 🦅 **Scavenger**: finishes off damaged tanks and grabs repair kits.
 
-Tous les tanks savent trouver leur chemin (A*), anticiper la trajectoire de leur cible et esquiver les obus.
+Every tank finds its way around obstacles (A*), leads its shots on moving targets and dodges incoming shells.
 
-## Pendant la bataille
+## During the battle
 
-- `Espace` : pause · `1` `2` `3` : vitesse ×1, ×2, ×4 · `M` : couper le son
-- **Clic sur un tank** : affiche sa portée, sa cible, son chemin et ce qu'il est en train de faire.
-- Caisses destructibles (elles lâchent parfois un kit), kits de réparation, et une **zone mortelle** qui se referme après 60 s.
+- `Space`: pause · `1` `2` `3`: speed ×1, ×2, ×4 · `M`: mute
+- **Click a tank** to see its range, its target, its path and what it is doing.
+- Destructible crates (they sometimes drop a kit), repair kits, and a **death zone** that closes in after 60 s.
+- Sound effects are generated live in the browser (Web Audio), no audio files.
 
-## Modifier le jeu
+## Modding the game
 
-| Fichier | Contenu |
+| File | Contents |
 |---|---|
-| `js/config.js` | **Équilibrage** : budget, coûts, formules des stats, comportements, noms, couleurs |
-| `js/ai.js` | Cerveau des tanks (cible, déplacement, esquive, visée) |
-| `js/map.js` | Génération de la carte, ligne de vue, pathfinding |
-| `js/tank.js` | Physique et dessin des tanks |
-| `js/game.js` | Boucle de jeu, obus, effets, zone, rendu |
-| `js/audio.js` | Sons générés en direct (Web Audio), aucun fichier audio |
-| `js/ui.js` | Garage, tableau des scores, résultats |
+| `js/config.js` | **Balance**: budget, costs, stat formulas, pilots, names, colors |
+| `js/ai.js` | Tank brain (targeting, movement, dodging, aiming) |
+| `js/map.js` | Map generation, line of sight, pathfinding |
+| `js/tank.js` | Tank physics and drawing |
+| `js/game.js` | Game loop, shells, effects, death zone, rendering |
+| `js/audio.js` | Sound effects (Web Audio) |
+| `js/ui.js` | Garage, scoreboard, results |
 
-Les tanks du garage sont sauvegardés dans le navigateur (localStorage).
+Garage tanks and sound settings are saved in the browser (localStorage).
 
-Pour déboguer, la partie en cours est accessible dans la console : `__game`.
+For debugging, the current battle is available in the console as `__game`.
