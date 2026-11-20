@@ -15,7 +15,8 @@ The game adapts to phones (the desktop version is unchanged):
 - **Garage in tabs** (Tanks / Stats / Modules & pilot / Specs) with a fixed bar showing the points left and the Start button. Tap a stat name to see its description.
 - **Portrait map** when the phone is held upright (same number of cells, same balance).
 - **Camera** that follows your tank: tap a tank to follow it, pinch to zoom, drag to look around, double-tap for the whole map, 🎥 to switch.
-- **Scoreboard drawer** at the bottom of the screen, vibrations when your tank is hit or destroyed (Android).
+- **Scoreboard drawer** at the bottom of the screen.
+- **Hit feedback**: the screen edges flash red when your tank is hit, deep red when it is destroyed and gold when it wins. On Android the phone also vibrates (iPhone does not let web pages vibrate).
 - **Installable app (PWA)**: on the GitHub Pages site, use *Install* (Android) or *Share → Add to Home Screen* (iPhone). It then runs full screen and offline.
 
 ## How it works

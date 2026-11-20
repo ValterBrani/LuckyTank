@@ -998,7 +998,9 @@
   /* ---------------- Vibrations (téléphone) ---------------- */
   let lastVib = 0;
   function onHaptic(kind, tank) {
-    if (!HB.isTouch || !navigator.vibrate || !HB.sfx.audible || !game) return;
+    if (!HB.isTouch || !game) return;
+    flashFor(kind, tank);
+    if (!navigator.vibrate || !HB.sfx.audible) return; // iPhone : pas de vibration possible
     const me = game.focus;
     let pattern = null;
     if (kind === 'hit' && tank === me) pattern = 25;
@@ -1009,6 +1011,30 @@
     if (kind !== 'win' && now - lastVib < 150) return;
     lastVib = now;
     try { navigator.vibrate(pattern); } catch (e) { /* ignore */ }
+  }
+
+  /* ---------------- Éclair sur les bords de l'écran (téléphone) ----------------
+   * Retour visuel quand TON tank est touché, détruit ou gagne. Complète la vibration
+   * (Android) et la remplace là où elle n'existe pas (iPhone).
+   * Au plus ~3 éclairs par seconde, et rien si l'appareil demande moins d'animations. */
+  const FLASH = {
+    hit:  { shadow: 'inset 0 0 70px 24px rgba(255, 40, 40, .95)', peak: 1, duration: 380 },
+    kill: { shadow: 'inset 0 0 130px 46px rgba(255, 25, 25, 1)', peak: 1, duration: 900 },
+    win:  { shadow: 'inset 0 0 90px 26px rgba(255, 200, 70, .9)', peak: 1, duration: 1400 },
+  };
+  let lastFlash = 0;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function flashFor(kind, tank) {
+    if (tank !== game.focus || !FLASH[kind] || reducedMotion.matches) return;
+    const now = performance.now();
+    if (kind === 'hit' && now - lastFlash < 340) return;
+    lastFlash = now;
+    const f = FLASH[kind], el = $('#hitFlash');
+    if (kind === 'kill') game.shake = Math.max(game.shake, 18); // ton tank explose : grosse secousse
+    el.style.boxShadow = f.shadow;
+    if (el.animate) {
+      el.animate([{ opacity: f.peak }, { opacity: 0 }], { duration: f.duration, easing: 'ease-out' });
+    }
   }
 
   /* ---------------- Application installable (PWA) ---------------- */

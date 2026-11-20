@@ -367,6 +367,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .touch-only { display: none !important; }
 body.touch .touch-only:not([hidden]) { display: inline-flex !important; align-items: center; justify-content: center; }
 .cam-btn.on { background: var(--accent); color: #1b1408; border-color: var(--accent); }
+.hit-flash { position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 9; }
 .res-scroll { overflow-x: auto; }
 
 /* Cibles plus grandes au doigt */
