@@ -32,6 +32,43 @@
       this.wobbleT = 0;
       this.state = 'Starting';
       this.wantMove = false;
+      // Nouveaux pilotes
+      this.gambleKey = HB.GAMBLE_STYLES[Math.floor(Math.random() * HB.GAMBLE_STYLES.length)];
+      this.gambleT = 10 + Math.random() * 5;
+      this.hideSpot = null;
+      this.hideT = 0;
+      this.hideClock = 0;
+      this.pounceT = 0;
+      this.huntT = 0;
+      this.holdFire = false;
+      if (this.behKey === 'custom') {
+        const p = HB.sanitizePilot(tank.cfg.pilot);
+        this.custom = { key: 'custom', distFactor: HB.PILOT_DIST(p), target: p.target, move: p.move };
+      }
+    }
+
+    /* Style de pilotage du moment (le Gambler en change, le Custom suit ses réglages) */
+    style() {
+      if (this.behKey === 'custom') return this.custom;
+      const k = this.behKey === 'joueur' ? this.gambleKey : this.behKey;
+      const b = HB.BEHAVIORS[k];
+      return { key: k, distFactor: b.distFactor, target: b.target, move: null };
+    }
+
+    /* Texte affiché (le Gambler montre l'icône du style tiré au sort) */
+    get shown() {
+      return this.behKey === 'joueur' ? HB.BEHAVIORS[this.gambleKey].icon + ' ' + this.state : this.state;
+    }
+
+    updateGamble(dt, game) {
+      this.gambleT -= dt;
+      if (this.gambleT > 0) return;
+      const keys = HB.GAMBLE_STYLES.filter(k => k !== this.gambleKey);
+      this.gambleKey = keys[Math.floor(Math.random() * keys.length)];
+      this.gambleT = 10 + Math.random() * 5;
+      this.hideSpot = null; this.pounceT = 0; this.huntT = 0; this.hideClock = 0;
+      const b = HB.BEHAVIORS[this.gambleKey];
+      game.text(this.t.x, this.t.y - 44, '🎲 ' + b.icon + ' ' + b.label, '#ffe9a8');
     }
 
     update(dt, game) {
@@ -43,16 +80,22 @@
         return;
       }
 
+      if (this.behKey === 'joueur') this.updateGamble(dt, game);
+      // Partie bloquée (20 s sans aucun dégât) : tout le monde passe à l'attaque
+      const stalemate = game.time - (game.lastDamageT || 0) > 20;
+      const S = stalemate ? { key: 'flanqueur', distFactor: 0.5, target: 'nearest', move: null } : this.style();
+      this.holdFire = false;
+
       // ---------- 1. Choix de la cible ----------
       this.retargetT -= dt;
-      if (this.retargetT <= 0 || !this.target || !this.target.alive) {
+      if (this.retargetT <= 0 || !this.target || !this.target.alive || !HB.isEnemy(t, this.target)) {
         this.retargetT = 0.5 + Math.random() * 0.3;
-        this.target = this.chooseTarget(enemies, game);
+        this.target = this.chooseTarget(enemies, game, S);
       }
       const tg = this.target;
       const range = t.d.range;
       const dT = dist(t.x, t.y, tg.x, tg.y);
-      const crateOk = this.behKey === 'agressif';
+      const crateOk = S.key === 'agressif';
       const shotOnTarget = game.canSee(t.x, t.y, tg.x, tg.y, !crateOk);
 
       // ---------- 2. Intention de déplacement ----------
@@ -61,7 +104,7 @@
       const inZone = (x, y, m = 0) => !zone.active || dist(x, y, zone.x, zone.y) < zone.r - m;
       const pickup = game.nearestPickup(t.x, t.y, p => inZone(p.x, p.y, 20));
       const hpR = t.hpRatio;
-      const retreat = t.cfg.retreat || 0;
+      const retreat = stalemate ? 0 : (t.cfg.retreat || 0);
       const nearest = this.nearestEnemy(enemies);
       const threatened = nearest && dist(t.x, t.y, nearest.x, nearest.y) < nearest.d.range + 80;
 
@@ -71,17 +114,25 @@
         goal = pickup; this.state = 'Going to repair';
       } else if (hpR < retreat && threatened) {
         goal = this.fleePoint(enemies, game, dt); this.state = 'Retreating';
-      } else if (this.behKey === 'opportuniste' && pickup && hpR < 0.85 &&
+      } else if (S.key === 'opportuniste' && pickup && hpR < 0.85 &&
                  dist(t.x, t.y, pickup.x, pickup.y) < dT) {
         goal = pickup; this.state = 'Grabbing a kit';
       } else {
-        const desired = this.beh.distFactor * range;
-        if (!shotOnTarget || dT > range * 0.95) {
+        const desired = S.distFactor * range;
+        const toX = (tg.x - t.x) / (dT || 1), toY = (tg.y - t.y) / (dT || 1);
+        const tanX = -toY * this.strafeDir, tanY = toX * this.strafeDir;
+        // Pilotes à tactique propre : ils décident eux-mêmes (null = comportement standard)
+        const special = S.key === 'embusque' ? this.ambush(game, enemies, tg, dT, shotOnTarget, dt, toX, toY, tanX, tanY)
+          : S.key === 'harceleur' ? this.hitAndRun(tg, dT, shotOnTarget, toX, toY, tanX, tanY)
+          : null;
+        if (special) {
+          goal = special.goal || null; dir = special.dir || null;
+          allowReverse = !!special.allowReverse; speedScale = special.speedScale || 1;
+        } else if (!shotOnTarget || dT > range * 0.95) {
           goal = tg; this.state = 'Chasing';
         } else {
-          const toX = (tg.x - t.x) / dT, toY = (tg.y - t.y) / dT;
-          const tanX = -toY * this.strafeDir, tanY = toX * this.strafeDir;
-          switch (this.behKey) {
+          const move = S.key === 'custom' ? S.move : S.key;
+          switch (move) {
             case 'agressif':
               if (dT > desired) {
                 // Charge en zigzag pour être plus dur à toucher
@@ -91,6 +142,15 @@
                 dir = { x: toX, y: toY }; this.state = 'Ramming!';   // a l'avantage : il fonce dedans
               } else { dir = { x: tanX * 0.8 + toX * 0.15, y: tanY * 0.8 + toY * 0.15 }; speedScale = 0.75; allowReverse = true; this.state = 'Pounding'; }
               break;
+            case 'zigzag': {
+              const radial = clamp((dT - desired) / desired, -1, 1) * 1.4;
+              const zig = Math.sin(game.time * 3.2 + t.index * 1.7) * 1.1;
+              dir = { x: toX * radial + tanX * zig, y: toY * radial + tanY * zig };
+              allowReverse = true;
+              this.state = 'Zigzagging';
+              break;
+            }
+            case 'hold':
             case 'tireur':
               if (dT < desired * 0.75) { dir = { x: -toX + tanX * 0.3, y: -toY + tanY * 0.3 }; allowReverse = true; this.state = 'Backing off'; }
               else if (dT > range * 0.92) { dir = { x: toX, y: toY }; speedScale = 0.5; this.state = 'Adjusting'; }
@@ -100,7 +160,7 @@
               const radial = clamp((dT - desired) / desired, -1, 1) * 1.4;
               dir = { x: tanX + toX * radial, y: tanY + toY * radial };
               allowReverse = true;
-              this.state = this.behKey === 'opportuniste' ? 'Harassing' : 'Circling';
+              this.state = S.key === 'opportuniste' ? 'Harassing' : 'Circling';
             }
           }
         }
@@ -108,8 +168,9 @@
 
       // Intention du moment (sert aux conditions des modules ; l'esquive ne la masque pas)
       const st0 = this.state;
-      this.mode = (st0 === 'Retreating' || st0 === 'Going to repair' || st0 === 'Escaping the zone' || st0 === 'Grabbing a kit') ? 'retreat'
-        : (st0 === 'Chasing' || st0 === 'Charging' || st0 === 'Ramming!') ? 'chase' : 'fight';
+      this.mode = (st0 === 'Retreating' || st0 === 'Going to repair' || st0 === 'Escaping the zone' || st0 === 'Grabbing a kit' ||
+                   st0 === 'Falling back' || st0 === 'Sneaking to cover') ? 'retreat'
+        : (st0 === 'Chasing' || st0 === 'Charging' || st0 === 'Ramming!' || st0 === 'Pouncing!' || st0 === 'Striking') ? 'chase' : 'fight';
 
       // Change de sens d'orbite de temps en temps (imprévisible)
       this.strafeT -= dt;
@@ -196,15 +257,88 @@
       }
     }
 
-    chooseTarget(enemies, game) {
+    /* 🦊 Ambusher : se cache hors de vue, puis bondit quand une proie passe tout près */
+    ambush(game, enemies, tg, dT, seen, dt, toX, toY, tanX, tanY) {
+      const t = this.t, range = t.d.range;
+      const pounceD = Math.min(range * 0.75, 320);
+      const preyClose = enemies.some(e => dist(t.x, t.y, e.x, e.y) < pounceD && game.canSee(t.x, t.y, e.x, e.y));
+      if (preyClose || game.time - t.lastHitT < 2.5) this.pounceT = 4;
+      this.pounceT = Math.max(0, this.pounceT - dt);
+      this.huntT = Math.max(0, this.huntT - dt);
+      if (this.pounceT > 0) {
+        this.hideClock = 0;
+        if (!seen) { this.state = 'Pouncing!'; return { goal: tg }; }
+        this.state = 'Pouncing!';
+        if (dT > range * 0.4) {
+          const zig = Math.sin(game.time * 3.2 + t.index) * 0.6;
+          return { dir: { x: toX + tanX * zig, y: toY + tanY * zig } };
+        }
+        return { dir: { x: tanX * 0.8 + toX * 0.15, y: tanY * 0.8 + toY * 0.15 }, allowReverse: true, speedScale: 0.8 };
+      }
+      // Patience : caché trop longtemps sans proie → part en chasse un moment
+      this.hideClock += dt;
+      if (this.hideClock > 18) { this.huntT = 8; this.hideClock = 0; this.hideSpot = null; }
+      if (this.huntT > 0) return null; // chasse "normale"
+      // Se mettre à couvert, sans tirer pour ne pas se trahir
+      this.holdFire = true;
+      this.hideT -= dt;
+      const spotSeen = this.hideSpot && enemies.some(e => game.canSee(e.x, e.y, this.hideSpot.x, this.hideSpot.y));
+      if (!this.hideSpot || this.hideT <= 0 || spotSeen) { this.hideSpot = this.findHideSpot(game, enemies); this.hideT = 4; }
+      if (dist(t.x, t.y, this.hideSpot.x, this.hideSpot.y) < 22) { this.state = 'Lying in wait'; return { dir: null }; }
+      this.state = 'Sneaking to cover';
+      return { goal: this.hideSpot };
+    }
+
+    /* Cachette : une case collée à un mur ou une caisse, invisible des ennemis, pas trop loin */
+    findHideSpot(game, enemies) {
+      const t = this.t, map = game.map, z = game.zone;
+      let best = null, bs = Infinity;
+      for (let i = 0; i < 40; i++) {
+        const p = map.randomFreePoint(Math.random, 0);
+        const cx = Math.floor(p.x / HB.CELL), cy = Math.floor(p.y / HB.CELL);
+        if (!map.nearWall[map.idx(cx, cy)]) continue;
+        if (z.active && dist(p.x, p.y, z.x, z.y) > z.r - 80) continue;
+        let seenBy = 0, nearE = Infinity;
+        for (const e of enemies) {
+          if (game.canSee(e.x, e.y, p.x, p.y)) seenBy++;
+          nearE = Math.min(nearE, dist(p.x, p.y, e.x, e.y));
+        }
+        const s = seenBy * 1000 + dist(t.x, t.y, p.x, p.y) * 0.6 + Math.abs(nearE - 320) * 0.4;
+        if (s < bs) { bs = s; best = p; }
+      }
+      return best || { x: t.x, y: t.y };
+    }
+
+    /* 🐝 Hit-and-run : tire, recule hors de portée pendant la recharge, revient canon chargé */
+    hitAndRun(tg, dT, seen, toX, toY, tanX, tanY) {
+      const t = this.t, range = t.d.range;
+      if (t.reloadT > 0.8) {
+        const safe = Math.max(tg.d.range * 0.9, range * 0.55);
+        if (dT < safe) { this.state = 'Falling back'; return { dir: { x: -toX + tanX * 0.5, y: -toY + tanY * 0.5 }, allowReverse: true, speedScale: 0.75 }; }
+        this.state = 'Reloading';
+        return { dir: { x: tanX, y: tanY }, allowReverse: true, speedScale: 0.4 };
+      }
+      if (!seen) { this.state = 'Striking'; return { goal: tg }; }
+      if (dT > range * 0.85) { this.state = 'Striking'; return { dir: { x: toX + tanX * 0.3, y: toY + tanY * 0.3 } }; }
+      this.state = 'Firing';
+      return { dir: { x: tanX * 0.6, y: tanY * 0.6 }, allowReverse: true, speedScale: 0.5 };
+    }
+
+    chooseTarget(enemies, game, S) {
       const t = this.t;
       let best = null, bs = Infinity;
       for (const e of enemies) {
         const d = dist(t.x, t.y, e.x, e.y);
-        let s = this.beh.target === 'weakest' ? e.hp * 1.5 + d * 0.35 : d;
+        let s;
+        switch (S.target) {
+          case 'weakest': s = e.hp * 1.5 + d * 0.35; break;
+          case 'dangerous': s = d * 0.6 + (60 - Math.min(60, e.d.dps * (1 + e.kills * 0.3))) * 25; break; // le plus de dégâts/s
+          case 'attacker': s = (e === t.lastAttacker && game.time - t.lastHitT < 8) ? d * 0.2 : d; break;
+          default: s = d;
+        }
         if (e === t.lastAttacker && game.time - t.lastHitT < 3) s *= 0.65; // riposte
         if (e === this.target) s *= 0.85; // garde sa cible (hystérésis)
-        if (this.behKey === 'tireur' && game.canSee(t.x, t.y, e.x, e.y)) s *= 0.7;
+        if (S.key === 'tireur' && game.canSee(t.x, t.y, e.x, e.y)) s *= 0.7;
         if (s < bs) { bs = s; best = e; }
       }
       return best;
@@ -364,7 +498,7 @@
       c.aim = Math.atan2(ay - t.y, ax - t.x) + this.wobble;
       const d = dist(t.x, t.y, aimT.x, aimT.y);
       const tol = clamp(Math.atan2(aimT.radius * 0.8, d), 0.03, 0.15);
-      c.fire = Math.abs(angDiff(c.aim, t.turret)) < tol;
+      c.fire = Math.abs(angDiff(c.aim, t.turret)) < tol && !this.holdFire; // l'embusqué ne se trahit pas
     }
   }
 

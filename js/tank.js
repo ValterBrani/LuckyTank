@@ -150,6 +150,7 @@
     takeDamage(amount, attacker, game) {
       if (!this.alive) return 0;
       if (this.shieldT > 0) amount *= 0.35; // le bouclier absorbe 65 %
+      if (amount > 0) game.lastDamageT = game.time;
       if (game.haptic && amount >= 3) game.haptic('hit', this); // pas pour la zone (dégâts continus)
       const real = Math.min(amount, this.hp);
       this.hp -= amount;

@@ -97,6 +97,7 @@
       color: /^#[0-9a-f]{6}$/i.test(t.color) ? t.color : HB.COLORS[0],
       stats, modules,
       behavior: HB.BEHAVIORS[t.behavior] ? t.behavior : 'flanqueur',
+      pilot: HB.sanitizePilot(t.pilot),
       retreat: HB.RETREAT.some(r => r.value === t.retreat) ? t.retreat : 0,
       random: !!t.random,
     };
@@ -127,7 +128,7 @@
     state.roster = [{
       id: HB.uid(), name: 'My Tank', color: HB.COLORS[0],
       stats: { vitesse: 5, blindage: 5, puissance: 5, cadence: 5, portee: 5 }, modules: [],
-      behavior: 'flanqueur', retreat: 0.25, random: false,
+      behavior: 'flanqueur', pilot: Object.assign({}, HB.DEFAULT_PILOT), retreat: 0.25, random: false,
     }];
     for (let i = 0; i < 3; i++) state.roster.push(HB.randomTank(state.roster));
     state.sel = 0;
@@ -179,6 +180,16 @@
     if (d.shellSpeed < 420) out.push(['info', 'Slow shells: fast tanks will be able to dodge them.']);
     if (t.behavior === 'tireur' && d.range < 400) out.push(['warn', 'A Sniper with little range is not ideal.']);
     if (t.behavior === 'agressif' && d.maxHp < 140) out.push(['warn', 'A fragile Bruiser is likely to die first.']);
+    if (t.behavior === 'embusque' && d.range > 480) out.push(['warn', 'An Ambusher fights up close: long range is partly wasted.']);
+    if (t.behavior === 'harceleur' && d.reload < 1.1) out.push(['info', 'Hit-and-run shines with a big gun that reloads slowly.']);
+    if (t.behavior === 'harceleur' && d.speed < 60) out.push(['warn', 'Hit-and-run needs speed to get away while reloading.']);
+    if (t.behavior === 'joueur') out.push(['info', 'The Gambler keeps changing style: a balanced tank suits it best.']);
+    if (t.behavior === 'custom') {
+      const p = HB.sanitizePilot(t.pilot);
+      if (p.move === 'hold' && d.range < 330) out.push(['warn', 'Holding still with a short range: faster tanks will pick you apart.']);
+      if (p.dist === 'long' && d.range < 400) out.push(['warn', 'Long distance with little range is not ideal.']);
+      if (p.dist === 'close' && d.maxHp < 130) out.push(['warn', 'Fighting up close with little armor is risky.']);
+    }
     for (const m of t.modules || []) {
       if (m.id === 'reparation' && (m.trigger === 'ready' || m.trigger === 'chasing' || m.trigger === 'inSight')) {
         out.push(['warn', 'Emergency repair works only once: keep it for when HP is low.']);
@@ -334,8 +345,21 @@
       return `<button class="beh ${t.behavior === k ? 'on' : ''}" data-beh="${k}" ${off ? 'disabled' : ''}><span class="bi">${b.icon}</span><b>${b.label}</b><small>${b.desc}</small></button>`;
     }).join('');
 
+    renderPilotCustom(t);
+
     $('#retreatBtns').innerHTML = HB.RETREAT.map(r =>
       `<button data-retreat="${r.value}" class="${t.retreat === r.value ? 'on' : ''}">${r.label}</button>`).join('');
+  }
+
+  function renderPilotCustom(t) {
+    const el = $('#pilotCustom');
+    el.hidden = t.behavior !== 'custom';
+    if (el.hidden) return;
+    const p = t.pilot = HB.sanitizePilot(t.pilot);
+    el.innerHTML = Object.entries(HB.PILOT).map(([k, def]) =>
+      `<div class="pc-row"><span>${def.label}</span><div class="seg" data-pk="${k}">${
+        def.options.map(o => `<button data-pv="${o[0]}" class="${p[k] === o[0] ? 'on' : ''}">${o[1]}</button>`).join('')
+      }</div></div>`).join('');
   }
 
   function renderModules(t, R) {
@@ -503,7 +527,7 @@
       } else if (act === 'reroll') {
         const t = state.roster[i];
         const r = HB.randomTank(state.roster.filter(o => o !== t));
-        Object.assign(t, { stats: r.stats, modules: r.modules, behavior: r.behavior, retreat: r.retreat, random: true });
+        Object.assign(t, { stats: r.stats, modules: r.modules, behavior: r.behavior, pilot: r.pilot, retreat: r.retreat, random: true });
         state.sel = i;
       } else {
         state.sel = i;
@@ -522,7 +546,7 @@
       r.name = 'Player ' + (state.roster.length + 1);
       r.stats = { vitesse: 1, blindage: 1, puissance: 1, cadence: 1, portee: 1 };
       r.modules = [];
-      r.behavior = 'flanqueur'; r.retreat = 0.25; r.random = false;
+      r.behavior = 'flanqueur'; r.pilot = Object.assign({}, HB.DEFAULT_PILOT); r.retreat = 0.25; r.random = false;
       state.roster.push(r);
       state.sel = state.roster.length - 1;
       state.picking = null;
@@ -603,6 +627,17 @@
       const b = e.target.closest('[data-beh]');
       if (!b || b.disabled) return;
       cur().behavior = b.dataset.beh;
+      markCustom();
+      renderAll();
+    });
+
+    $('#pilotCustom').addEventListener('click', e => {
+      const b = e.target.closest('[data-pv]');
+      if (!b) return;
+      const k = b.closest('[data-pk]').dataset.pk;
+      const t = cur();
+      t.pilot = HB.sanitizePilot(t.pilot);
+      t.pilot[k] = b.dataset.pv;
       markCustom();
       renderAll();
     });
@@ -764,7 +799,7 @@
       const ratio = t.hpRatio;
       r.hp.style.width = (ratio * 100) + '%';
       r.hp.style.background = ratio > 0.5 ? 'var(--good)' : ratio > 0.25 ? '#f2c230' : 'var(--bad)';
-      r.st.textContent = t.alive ? `${Math.ceil(t.hp)} HP · ${t.brain.state}` : `Destroyed · ${ordinal(t.place)}`;
+      r.st.textContent = t.alive ? `${Math.ceil(t.hp)} HP · ${t.brain.shown}` : `Destroyed · ${ordinal(t.place)}`;
       r.k.innerHTML = `⚔ ${t.kills}<br><span class="muted">${Math.round(t.damageDealt)} dmg</span>`;
       r.mods.innerHTML = t.mods.map(m => `<span class="${m.cd <= 0 && m.uses > 0 ? 'ready' : ''}" title="${m.def.label}">${m.def.icon}</span>`).join('');
     }

@@ -32,6 +32,7 @@
       this.mines = [];
       this.player = this.options.challenge ? this.tanks[this.options.playerIndex || 0] : null;
       this.survived = false;
+      this.lastDamageT = 0; // sert à repérer une partie bloquée (plus personne ne se touche)
       this.time = 0;
       this.speed = 1;
       this.paused = false;
@@ -103,8 +104,8 @@
         z.r = lerp(z.maxR, z.minR, e);
       }
 
-      // Kits de réparation
-      if (this.options.pickups) {
+      // Kits de réparation (plus aucun après 2 minutes : sinon un long duel peut ne jamais finir)
+      if (this.kitsAvailable()) {
         this.pickupT -= dt;
         if (this.pickupT <= 0) {
           this.pickupT = 9 + Math.random() * 8;
@@ -450,8 +451,10 @@
         p.size = 3 + Math.random() * 3; p.square = true; p.vr = (Math.random() - 0.5) * 20; p.drag = 3; p.life = p.maxLife = 0.9;
         this.particles.push(p);
       }
-      if (this.options.pickups && Math.random() < 0.3) this.spawnPickup(c.x, c.y);
+      if (this.kitsAvailable() && Math.random() < 0.3) this.spawnPickup(c.x, c.y);
     }
+
+    kitsAvailable() { return this.options.pickups && this.time < 120; }
 
     spawnPickup(x, y) {
       this.pickups.push({ x, y, t: 0, alive: true });
@@ -859,7 +862,7 @@
         if (sel === t) {
           ctx.font = '10px system-ui, sans-serif';
           ctx.fillStyle = '#ffe9a8';
-          ctx.fillText(t.brain.state, t.x, t.y + 32);
+          ctx.fillText(t.brain.shown, t.x, t.y + 32);
         }
       }
 
