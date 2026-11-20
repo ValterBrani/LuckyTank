@@ -15,7 +15,8 @@ The game adapts to phones (the desktop version is unchanged):
 - **Garage in tabs** (Tanks / Stats / Modules & pilot / Specs) with a fixed bar showing the points left and the Start button. Tap a stat name to see its description.
 - **Portrait map** when the phone is held upright (same number of cells, same balance).
 - **Camera** that follows your tank: tap a tank to follow it, pinch to zoom, drag to look around, double-tap for the whole map, 🎥 to switch.
-- **Scoreboard drawer** at the bottom of the screen, vibrations when your tank is hit or destroyed (Android).
+- **Scoreboard drawer** at the bottom of the screen.
+- **Hit feedback**: the screen edges flash red when your tank is hit, deep red when it is destroyed and gold when it wins. On Android the phone also vibrates (iPhone does not let web pages vibrate).
 - **Installable app (PWA)**: on the GitHub Pages site, use *Install* (Android) or *Share → Add to Home Screen* (iPhone). It then runs full screen and offline.
 
 ## How it works
@@ -67,6 +68,10 @@ To test everything without playing the campaign: open `index.html?unlockall` (or
 - 🔭 **Sniper**: stays at the edge of its range, backs off when someone gets close.
 - 🌀 **Flanker**: circles its target to dodge its shots.
 - 🦅 **Scavenger**: finishes off damaged tanks and grabs repair kits.
+- 🦊 **Ambusher**: hides out of sight behind walls and crates, holds its fire, then pounces when an enemy comes close.
+- 🐝 **Hit-and-run**: fires, backs off out of range while reloading, comes back when the gun is ready.
+- 🎲 **Gambler**: switches to a random pilot style every 10 to 15 seconds.
+- 🛠️ **Custom**: your own pilot. Choose its distance (close / mid-range / long), its target (nearest / weakest / most dangerous / last attacker) and how it moves (hold still / circle / zigzag).
 
 Every tank finds its way around obstacles (A*), leads its shots on moving targets and dodges incoming shells.
 
@@ -74,7 +79,7 @@ Every tank finds its way around obstacles (A*), leads its shots on moving target
 
 - `Space`: pause · `1` `2` `3`: speed ×1, ×2, ×4 · `M`: mute
 - **Click a tank** to see its range, its target, its path and what it is doing.
-- Destructible crates (they sometimes drop a kit), repair kits, and a **death zone** that closes in after 60 s.
+- Destructible crates (they sometimes drop a kit), repair kits (none after 2 minutes, so every battle ends), and a **death zone** that closes in after 60 s.
 - Sound effects are generated live in the browser (Web Audio), no audio files.
 
 ## Modding the game

@@ -111,7 +111,40 @@ HB.BEHAVIORS = {
                   desc: 'Circles around its target while dodging its shots.' },
   opportuniste: { label: 'Scavenger',  icon: '🦅', distFactor: 0.70, target: 'weakest',
                   desc: 'Finishes off the most damaged tanks and grabs repair kits.' },
+  embusque:     { label: 'Ambusher',   icon: '🦊', distFactor: 0.45, target: 'nearest',
+                  desc: 'Hides out of sight behind walls and crates, waits for an enemy to come close, then pounces.' },
+  harceleur:    { label: 'Hit-and-run', icon: '🐝', distFactor: 0.80, target: 'nearest',
+                  desc: 'Fires, backs off out of range while reloading, and comes back when the gun is ready.' },
+  joueur:       { label: 'Gambler',    icon: '🎲', distFactor: 0.62, target: 'nearest',
+                  desc: 'Switches to a random pilot style every 10 to 15 seconds. Nobody can predict it.' },
+  custom:       { label: 'Custom',     icon: '🛠️', distFactor: 0.62, target: 'nearest',
+                  desc: 'Your own pilot: choose its distance, its target and how it moves.' },
 };
+
+/* Styles entre lesquels le Gambler tire au sort */
+HB.GAMBLE_STYLES = ['agressif', 'tireur', 'flanqueur', 'opportuniste', 'embusque', 'harceleur'];
+
+/* Réglages du pilote Custom */
+HB.PILOT = {
+  dist:   { label: 'Distance', options: [['close', 'Close', 0.38], ['mid', 'Mid-range', 0.62], ['long', 'Long', 0.88]] },
+  target: { label: 'Target',   options: [['nearest', 'Nearest'], ['weakest', 'Weakest'], ['dangerous', 'Most dangerous'], ['attacker', 'Last attacker']] },
+  move:   { label: 'Movement', options: [['hold', 'Hold still'], ['circle', 'Circle'], ['zigzag', 'Zigzag']] },
+};
+HB.DEFAULT_PILOT = { dist: 'mid', target: 'nearest', move: 'circle' };
+HB.sanitizePilot = p => {
+  const out = {};
+  for (const k of Object.keys(HB.PILOT)) {
+    const v = p && p[k];
+    out[k] = HB.PILOT[k].options.some(o => o[0] === v) ? v : HB.DEFAULT_PILOT[k];
+  }
+  return out;
+};
+HB.randomPilot = (rng = Math.random) => {
+  const out = {};
+  for (const k of Object.keys(HB.PILOT)) { const o = HB.PILOT[k].options; out[k] = o[Math.floor(rng() * o.length)][0]; }
+  return out;
+};
+HB.PILOT_DIST = p => HB.PILOT.dist.options.find(o => o[0] === p.dist)[2];
 
 HB.RETREAT = [
   { value: 0,    label: 'Never' },
@@ -182,6 +215,7 @@ HB.randomTank = (roster = [], opts = {}) => {
     stats: HB.randomStats(Math.random, HB.BUDGET - HB.modulesCost(modules)),
     modules,
     behavior: HB.randomBehavior(),
+    pilot: HB.randomPilot(),
     retreat: pick(HB.RETREAT).value,
     random: true,
   };
