@@ -137,7 +137,7 @@
   <!-- ===================== BATAILLE ===================== -->
   <section id="battle" class="screen">
     <div class="battle-top">
-      <button id="backGarage" class="btn small ghost">◀ Garage</button>
+      <button id="backGarage" class="btn small ghost">◀<span class="lbl"> Garage</span></button>
       <div class="speed" id="speedBtns">
         <button data-speed="0" title="Pause (Space)">⏸</button>
         <button data-speed="1" title="Normal speed (1)">×1</button>
@@ -147,6 +147,7 @@
       <div id="clock" class="clock">0:00</div>
       <div id="zoneInfo" class="zone-info"></div>
       <button id="camBtn" class="btn small touch-only cam-btn" title="Camera: follow / overview">🎥</button>
+      <button id="insideBtn" class="btn small inside-btn" title="Inside view: ride inside a tank (V)">🔭<span class="lbl"> Inside</span></button>
       <div class="sound"><button class="mute-btn" title="Mute / unmute (M)">🔊</button><input class="vol" type="range" min="0" max="1" step="0.05" title="Volume"></div>
     </div>
     <div class="battle-grid">
@@ -192,6 +193,7 @@
 <script src="js/ai.js"></script>
 <script src="js/tank.js"></script>
 <script src="js/game.js"></script>
+<script src="js/cockpit.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

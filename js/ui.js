@@ -29,7 +29,10 @@
   document.body.classList.toggle('touch', HB.isTouch);
   if (HB.isTouch) {
     document.getElementById('battleHint').textContent =
-      'Tap a tank to follow it with the camera. Pinch to zoom, drag to look around, double-tap to see the whole map. 🎥 switches between follow and overview.';
+      'Tap a tank to follow it with the camera. Pinch to zoom, drag to look around, double-tap to see the whole map. 🎥 switches between follow and overview. 🔭 puts you inside the tank.';
+  } else {
+    document.getElementById('battleHint').textContent =
+      'Click a tank to see its range, its target, its path and what it is doing. 🔭 Inside (V) puts you inside the selected tank.';
   }
   function setMTab(tab) {
     document.body.dataset.mtab = tab;
@@ -37,6 +40,7 @@
   }
   let game = null;
   let gameMode = 'free';
+  let wantInside = false; // la vue intérieure reste active d'une bataille à l'autre
 
   /* ---------------- Sauvegarde ---------------- */
   function load() {
@@ -728,6 +732,7 @@
     game = new HB.Game($('#battleCanvas'), roster, opts, { onHud: renderHud, onFeed: addFeed, onEnd: showResults, onHaptic });
     game.speed = state.speed || 1;
     if (HB.isTouch && game.focus) game.setFollow(game.focus);
+    if (wantInside && game.focus) game.setInside(game.focus);
     $('#battleSide').classList.remove('open');
     buildScoreboard();
     setSpeedButtons();
@@ -777,7 +782,11 @@
         <div style="min-width:0"><div class="nm">${esc(t.name)}${game.player === t ? ' <span class="you">YOU</span>' : ''} <span class="muted" title="${b.label}">${b.icon}</span> <span class="mods"></span></div>
         <div class="hp"><i></i></div><div class="st"></div></div>
         <div class="k"></div>`;
-      row.addEventListener('click', () => { game.selected = t.alive ? t : null; renderHud(game); });
+      row.addEventListener('click', () => {
+        game.selected = t.alive ? t : null;
+        if (game.cam.mode === 'inside' && t.alive) game.setInside(t); // monter dans un autre tank
+        renderHud(game);
+      });
       sb.appendChild(row);
       return { t, row, hp: row.querySelector('.hp i'), st: row.querySelector('.st'), k: row.querySelector('.k'), mods: row.querySelector('.mods') };
     });
@@ -807,6 +816,12 @@
     const f = g.focus;
     $('#sbSummary').textContent = `Tanks · ${alive}/${g.tanks.length} alive` + (f ? ` · ${f.name} ${f.alive ? Math.ceil(f.hp) + ' HP' : '💀'}` : '');
     $('#camBtn').classList.toggle('on', g.cam.mode === 'follow');
+    $('#insideBtn').classList.toggle('on', g.cam.mode === 'inside');
+    const cap = document.querySelector('#speedBtns button[data-speed="4"]');
+    if (cap) {
+      cap.classList.toggle('capped', g.cam.mode === 'inside');
+      cap.title = g.cam.mode === 'inside' ? 'Speed ×4 (limited to ×2 in the inside view)' : 'Speed ×4 (3)';
+    }
     const surv = g.options.survive;
     $('#clock').textContent = surv && !g.over ? fmtTime(Math.max(0, surv - g.time)) : fmtTime(g.time);
     const zi = $('#zoneInfo');
@@ -940,8 +955,10 @@
       if (!game) return;
       if (game.cam.mode === 'follow') game.overview();
       else game.setFollow(game.selected && game.selected.alive ? game.selected : game.focus);
+      wantInside = false;
       renderHud(game);
     });
+    $('#insideBtn').addEventListener('click', () => toggleInside());
 
     document.addEventListener('keydown', e => {
       if (screen !== 'battle' || !game) return;
@@ -950,8 +967,26 @@
       else if (e.key === '1') setSpeed(1);
       else if (e.key === '2') setSpeed(2);
       else if (e.key === '3') setSpeed(4);
-      else if (e.key === 'Escape') game.selected = null;
+      else if (e.key === 'v' || e.key === 'V') toggleInside();
+      else if (e.key === 'Escape') { if (game.cam.mode === 'inside') toggleInside(); else game.selected = null; }
     });
+  }
+
+  /* Vue intérieure : monter dans le tank sélectionné (sinon le sien), ou revenir à la carte */
+  function toggleInside() {
+    if (!game) return;
+    const c = game.cam;
+    if (c.mode === 'inside') {
+      const t = c.follow && c.follow.alive ? c.follow : null;
+      if (HB.isTouch && t) game.setFollow(t); else game.overview();
+      wantInside = false;
+    } else {
+      const pick = [game.selected, game.focus, ...game.tanks].find(t => t && t.alive);
+      if (!pick) return;
+      game.setInside(pick);
+      wantInside = true;
+    }
+    renderHud(game);
   }
 
   /* ---------------- Gestes sur la carte ----------------
@@ -970,6 +1005,7 @@
       try { cv.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
       const p = toCanvas(e);
       pts.set(e.pointerId, p);
+      if (game.cam.mode === 'inside') { drag = { x0: p.x, y0: p.y, last: p, t0: performance.now(), moved: false }; pinch = null; return; }
       if (pts.size === 2) {
         const [a, b] = [...pts.values()];
         pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: game.cam.zoom, mid: game.toWorld((a.x + b.x) / 2, (a.y + b.y) / 2) };
@@ -983,6 +1019,7 @@
       const p = toCanvas(e);
       pts.set(e.pointerId, p);
       const c = game.cam;
+      if (c.mode === 'inside') { if (drag && Math.hypot(p.x - drag.x0, p.y - drag.y0) > 12 * p.k) drag.moved = true; return; }
       if (pinch && pts.size >= 2) {
         const [a, b] = [...pts.values()];
         const z = HB.clamp(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0, 1, 3.5);
@@ -1015,6 +1052,14 @@
       drag = null;
       if (!had || !d || d.moved || performance.now() - d.t0 > 800) return;
       const now = performance.now();
+      if (game.cam.mode === 'inside') {
+        // Vue intérieure : toucher le radar (ou toucher deux fois) ramène à la carte
+        const r = game.cockpit && game.cockpit.radar;
+        const onRadar = r && Math.hypot(d.x0 - r.x, d.y0 - r.y) < r.r * 1.15;
+        if (onRadar || now - lastTap.t < 300) { toggleInside(); lastTap.t = 0; }
+        else lastTap = { t: now, x: d.x0, y: d.y0 };
+        return;
+      }
       if (now - lastTap.t < 300 && Math.hypot(d.x0 - lastTap.x, d.y0 - lastTap.y) < 40 * d.last.k) {
         game.overview();
         lastTap.t = 0;
