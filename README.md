@@ -77,8 +77,12 @@ Every tank finds its way around obstacles (A*), leads its shots on moving target
 
 ## During the battle
 
-- `Space`: pause · `1` `2` `3`: speed ×1, ×2, ×4 · `M`: mute
+- `Space`: pause · `1` `2` `3`: speed ×1, ×2, ×4 · `M`: mute · `V`: inside view
 - **Click a tank** to see its range, its target, its path and what it is doing.
+- **🔭 Inside view** (`V`): ride inside the selected tank (or your own) and watch the battle through its gun sight, in 3D.
+  A dashboard shows its armor, reload, modules, what the pilot is doing and a radar. Sounds from outside are muffled,
+  the engine rumbles and the pilot calls out hits and targets. If the tank is destroyed, you move to the tank that destroyed it.
+  Click a tank in the list to ride it instead. Speed is limited to ×2 in this view. On a phone, tap the radar to go back to the map.
 - Destructible crates (they sometimes drop a kit), repair kits (none after 2 minutes, so every battle ends), and a **death zone** that closes in after 60 s.
 - Sound effects are generated live in the browser (Web Audio), no audio files.
 
@@ -91,6 +95,7 @@ Every tank finds its way around obstacles (A*), leads its shots on moving target
 | `js/map.js` | Map generation, line of sight, pathfinding |
 | `js/tank.js` | Tank physics and drawing |
 | `js/game.js` | Game loop, shells, effects, death zone, rendering |
+| `js/cockpit.js` | Inside view: 3D view from a tank's gun sight (raycasting), dashboard and radar |
 | `js/audio.js` | Sound effects (Web Audio) |
 | `js/challenges.js` | Challenges, objectives, progress and unlocks |
 | `js/ui.js` | Garage, scoreboard, results, phone layout and touch gestures |

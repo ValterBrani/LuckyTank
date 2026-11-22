@@ -2,11 +2,11 @@
  * Stratégie : on répond avec la version en cache (instantané), et on la met à jour
  * en arrière-plan → une nouvelle version arrive au lancement suivant.
  * Pensez à changer CACHE quand on ajoute ou renomme un fichier. */
-const CACHE = 'luckytank-v1';
+const CACHE = 'luckytank-v2';
 const ASSETS = [
   './', './index.html', './css/style.css', './manifest.webmanifest',
   './js/config.js', './js/map.js', './js/audio.js', './js/challenges.js', './js/ai.js',
-  './js/tank.js', './js/game.js', './js/ui.js',
+  './js/tank.js', './js/game.js', './js/cockpit.js', './js/ui.js',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png',
 ];
 

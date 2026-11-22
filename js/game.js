@@ -72,14 +72,17 @@
     destroy() {
       this.destroyed = true;
       cancelAnimationFrame(this.raf);
+      if (this.cam.mode === 'inside') this.cabinOff();
     }
 
     frame(ts) {
       if (this.destroyed) return;
       const dt = Math.min(0.05, (ts - this.last) / 1000);
       this.last = ts;
+      this.lastDt = dt;
       if (!this.paused) {
-        this.acc += dt * this.speed;
+        // Vue intérieure : ×4 serait illisible, on plafonne à ×2
+        this.acc += dt * (this.cam.mode === 'inside' ? Math.min(this.speed, 2) : this.speed);
         const step = 1 / 60;
         let n = 0;
         while (this.acc >= step && n < 12) { this.update(step); this.acc -= step; n++; }
@@ -158,7 +161,7 @@
           if (!t.alive || dist(t.x, t.y, p.x, p.y) > t.radius + 10) continue;
           const healed = t.heal(t.d.maxHp * 0.35);
           p.alive = false;
-          HB.sfx.pickup(p.x);
+          HB.sfx.pickup(p.x, p.y);
           this.text(t.x, t.y - 26, '+' + Math.round(healed), '#5f5');
           for (let i = 0; i < 14; i++) this.particles.push(this.spark(p.x, p.y, '#6f6', 120));
           break;
@@ -279,7 +282,7 @@
       const closing = va + vb;
       if (!HB.isEnemy(a, b) || closing < 45 || this.time - a.ramT < 0.6 || this.time - b.ramT < 0.6) return;
       a.ramT = b.ramT = this.time;
-      HB.sfx.ram(closing / 200, (a.x + b.x) / 2);
+      HB.sfx.ram(closing / 200, (a.x + b.x) / 2, (a.y + b.y) / 2);
       const rammer = va >= vb ? a : b, other = rammer === a ? b : a;
       const sign = rammer === a ? 1 : -1;
       const k = closing * 0.15;
@@ -318,7 +321,7 @@
         case 'explosif': t.explosiveNext = true; break;
       }
       this.text(t.x, t.y - 44, d.icon + ' ' + d.label, '#ffe9a8');
-      HB.sfx.ability(m.id, t.x);
+      HB.sfx.ability(m.id, t.x, t.y);
     }
 
     makeSmoke(x, y, duration) {
@@ -364,7 +367,7 @@
       for (let i = 0; i < 6; i++) this.particles.push(this.smoke(x, y, '#555', 1.4));
       this.scorch(x, y);
       this.shake = Math.max(this.shake, 7);
-      HB.sfx.explosion(x);
+      HB.sfx.explosion(x, y);
     }
 
     updateModules(dt) {
@@ -423,7 +426,7 @@
         alive: true, trail: [], color: owner.color, explosive: owner.explosiveNext,
       });
       owner.explosiveNext = false;
-      HB.sfx.shot(owner.stats.puissance, x);
+      HB.sfx.shot(owner.stats.puissance, x, y);
       for (let i = 0; i < 2 + owner.stats.puissance / 3; i++) {
         const p = this.smoke(x, y, '#ccc', 0.5 + owner.stats.puissance * 0.05);
         p.vx += Math.cos(a) * 40; p.vy += Math.sin(a) * 40;
@@ -435,7 +438,7 @@
       s.alive = false;
       if (s.explosive) this.blast(s.x, s.y, s.dmg * 0.7, 64, s.owner, hitTank);
       const power = s.dmg / 58;
-      HB.sfx.impact(power, onTank, s.x);
+      HB.sfx.impact(power, onTank, s.x, s.y);
       const nSpark = 6 + Math.round(power * 14);
       for (let i = 0; i < nSpark; i++) this.particles.push(this.spark(s.x, s.y, onTank ? '#ffb347' : '#ffe0a0', 120 + power * 160));
       for (let i = 0; i < 2 + power * 5; i++) this.particles.push(this.smoke(s.x, s.y, '#777', 0.6 + power));
@@ -445,7 +448,7 @@
 
     crateBroken(cx, cy) {
       const c = this.map.center(cx, cy);
-      HB.sfx.crate(c.x);
+      HB.sfx.crate(c.x, c.y);
       for (let i = 0; i < 16; i++) {
         const p = this.spark(c.x, c.y, i % 2 ? '#a8763e' : '#6b4622', 160);
         p.size = 3 + Math.random() * 3; p.square = true; p.vr = (Math.random() - 0.5) * 20; p.drag = 3; p.life = p.maxLife = 0.9;
@@ -477,7 +480,7 @@
       victim.killer = attacker;
       victim.vx = victim.vy = 0;
       if (attacker && attacker !== victim) attacker.kills++;
-      HB.sfx.explosion(victim.x);
+      HB.sfx.explosion(victim.x, victim.y);
       this.haptic('kill', victim);
       // Grosse explosion
       for (let i = 0; i < 40; i++) this.particles.push(this.spark(victim.x, victim.y, i % 3 ? '#ffb347' : '#fff3b0', 300));
@@ -613,14 +616,30 @@
     /* ---------------- Caméra ---------------- */
     setFollow(t) {
       if (!t) return this.overview();
+      if (this.cam.mode === 'inside') this.cabinOff();
       this.cam.mode = 'follow';
       this.cam.follow = t;
       this.cam.targetZoom = this.cam.followZoom;
     }
     overview() {
+      if (this.cam.mode === 'inside') this.cabinOff();
       this.cam.mode = 'overview';
       this.cam.follow = null;
       this.cam.targetZoom = 1;
+    }
+    /* Vue intérieure : on monte dans un tank (vue 3D depuis son viseur) */
+    setInside(t) {
+      if (!t || !HB.Cockpit) return;
+      const c = this.cam;
+      if (!this.cockpit) this.cockpit = new HB.Cockpit(this);
+      if (c.mode !== 'inside') { this.cockpit.enter(); HB.sfx.cabin(true); }
+      c.mode = 'inside';
+      c.follow = t;
+      c.deadT = 0;
+    }
+    cabinOff() {
+      HB.sfx.cabin(false);
+      if (this.cockpit) this.cockpit.leave();
     }
     clampCam() {
       const c = this.cam;
@@ -630,6 +649,18 @@
     }
     updateCamera(dt) {
       const c = this.cam;
+      if (c.mode === 'inside') {
+        const t = c.follow;
+        if (!t) return this.overview();
+        if (!t.alive) {
+          // Son tank est détruit : après un moment, on monte dans celui de son vainqueur
+          c.deadT = (c.deadT || 0) + dt;
+          const next = (t.killer && t.killer.alive) ? t.killer : (this.winner && this.winner.alive ? this.winner : null);
+          if (next && c.deadT > 2.6) { c.follow = next; c.deadT = 0; }
+        }
+        if (this.cockpit) this.cockpit.sound(dt);
+        return;
+      }
       if (c.mode === 'follow') {
         let t = c.follow;
         if (t && !t.alive) {
@@ -661,6 +692,11 @@
 
     render() {
       const ctx = this.ctx;
+      if (this.cam.mode === 'inside' && this.cockpit) {
+        this.cockpit.render(this.lastDt || 1 / 60);
+        if (this.paused) this.drawPause();
+        return;
+      }
       ctx.save();
       const c = this.cam;
       if (c.zoom !== 1 || c.x !== HB.W / 2 || c.y !== HB.H / 2) {
@@ -878,14 +914,17 @@
       ctx.globalAlpha = 1;
       ctx.restore();
 
-      if (this.paused) {
-        ctx.fillStyle = 'rgba(0,0,0,0.35)';
-        ctx.fillRect(0, 0, HB.W, HB.H);
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 48px system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('PAUSE', HB.W / 2, HB.H / 2);
-      }
+      if (this.paused) this.drawPause();
+    }
+
+    drawPause() {
+      const ctx = this.ctx;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, 0, HB.W, HB.H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 48px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('PAUSE', HB.W / 2, HB.H / 2);
     }
 
     /* Sélection d'un tank au clic (coordonnées internes du canvas) */
