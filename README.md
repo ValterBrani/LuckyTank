@@ -99,3 +99,18 @@ Every tank finds its way around obstacles (A*), leads its shots on moving target
 Garage tanks, challenge progress and sound settings are saved in the browser (localStorage).
 
 For debugging, the current battle is available in the console as `__game`.
+
+## License
+
+Copyright (C) 2026 Nedim Šačić
+
+LuckyTank is free software: you can redistribute it and/or modify it under the terms of the
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0), as published by the Free Software Foundation.
+
+In short: you may play, copy, modify and share the game, including commercially. If you
+distribute a modified version or put it online for others to play, you must publish its full
+source code under the same license and keep the copyright notice.
+
+The source code is at <https://github.com/ValterBrani/LuckyTank>.
+
+The license covers the code. It does not grant any right to the name "LuckyTank" or its logo.
